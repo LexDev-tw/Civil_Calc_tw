@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "民事速算機",
+  "version": "1.4",
+  "description": "民事速算工具：金額計算、裁判費試算、期間試算、日期速算。",
+  "permissions": ["storage", "sidePanel"],
+  "host_permissions": [
+    "https://cdn.jsdelivr.net/*"
+  ],
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "開啟民事計算機"
+  }
+}

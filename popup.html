@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>民事速算機</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+    :root {
+      --blue: #004098;
+      --blue-dark: #00265c;
+      --rose: #e11d48;
+      --rose-dark: #9f1239;
+      --bg: #fafafa;
+      --bg-panel: #f3f4f6;
+      --border: #e5e7eb;
+      --text: #1f2937;
+      --text-muted: #6b7280;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', 'Microsoft JhengHei', sans-serif;
+      width: 420px; height: 600px; margin: 0;
+      background: var(--bg); color: var(--text);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .uppercase { text-transform: uppercase; }
+
+    .pin-btn {
+      background: none; border: none; cursor: pointer;
+      padding: 6px; border-radius: 6px;
+      color: var(--text-muted); display: flex;
+      align-items: center; justify-content: center;
+      transition: color 0.2s, background 0.2s;
+    }
+    .pin-btn:hover { color: var(--text); background: var(--border); }
+    .pin-btn.active { color: var(--blue); }
+    .pin-btn.active:hover { color: var(--blue-dark); background: #dbeafe; }
+    .pin-btn.active svg rect { fill: currentColor; opacity: 0.15; }
+    .pin-btn.active svg line { stroke-width: 2.5; }
+
+    body.sidepanel { width: 100%; height: 100vh; }
+
+    /* ── Tab Bar ── */
+    .tab-bar {
+      display: flex; padding: 10px 16px 8px; flex-shrink: 0;
+      align-items: center; gap: 8px;
+    }
+    .tab-switch {
+      position: relative; height: 32px;
+      background: #e5e7eb; border-radius: 999px; padding: 4px;
+      display: flex; flex: 1; min-width: 0; overflow: hidden;
+    }
+    .tab-switch-thumb {
+      position: absolute; left: 4px; top: 4px;
+      width: calc(33.333% - 3px); height: 24px;
+      background: var(--blue); border-radius: 999px;
+      transition: transform 0.3s; transform: translateX(0);
+    }
+    .tab-switch-thumb.pos1 { transform: translateX(100%); }
+    .tab-switch-thumb.pos2 { transform: translateX(200%); }
+    .tab-switch-text {
+      position: relative; z-index: 1; flex: 1; text-align: center;
+      font-size: 11px; font-weight: 700; line-height: 24px;
+      padding: 0 4px; white-space: nowrap; transition: color 0.3s;
+      user-select: none; cursor: pointer; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tab-bar .spacer { flex: 0; }
+    .tab-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
+    .tab-panel.active { display: flex; }
+
+    /* ── Tab 1: Calculator ── */
+    main { padding: 8px 24px 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    footer {
+      padding: 16px 24px; flex-shrink: 0;
+      background: var(--bg-panel); border-top: 1px solid var(--border);
+    }
+
+    .label, .label-sm { font-weight: 700; color: var(--text-muted); }
+    .label { font-size: 12px; }
+    .label-sm { font-size: 11px; }
+    .fee-header > span { font-size: 12px; font-weight: 700; color: var(--text); }
+
+    textarea {
+      width: 100%; height: 100%; padding: 12px;
+      background: #fff; border: 2px solid var(--border); border-radius: 6px;
+      font-size: 14px; line-height: 1.6; color: #374151;
+      resize: none; outline: 0; transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: var(--blue); }
+    textarea::placeholder { color: #9ca3af; }
+
+    .btn-text {
+      font-size: 12px; font-weight: 600; border: 0; background: none;
+      cursor: pointer; padding: 0; transition: color 0.2s;
+    }
+    .btn-rose { color: var(--rose); }
+    .btn-rose:hover { color: var(--rose-dark); }
+    .btn-muted { color: var(--text-muted); }
+    .btn-muted:hover { color: var(--text); }
+    .btn-blue { color: var(--blue); }
+    .btn-blue:hover { color: var(--blue-dark); }
+    .btn-action {
+      height: 40px; padding: 0 12px; font-size: 12px; font-weight: 700;
+      background: #fff; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer;
+    }
+
+    .tools-row {
+      padding: 8px 24px 12px; flex-shrink: 0;
+      display: flex; justify-content: space-between; align-items: flex-end;
+    }
+    .tools-buttons { display: flex; gap: 16px; padding-bottom: 8px; }
+    .tools-result { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+    .result-display {
+      font-size: 30px; font-weight: 700; color: var(--text); text-align: right;
+      white-space: nowrap; overflow-x: auto; max-width: 100%;
+    }
+    .result-display.empty { color: #d1d5db; }
+    .result-display::-webkit-scrollbar { display: none; }
+
+    .fee-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 0 8px; margin-bottom: 4px;
+      font-size: 12px; font-weight: 700; color: var(--text);
+    }
+    .fee-input-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .fee-actions { display: flex; gap: 4px; }
+    .fee-cards { display: flex; gap: 16px; }
+
+    .switch-container {
+      position: relative; width: 192px; height: 32px;
+      background: #e5e7eb; border-radius: 999px; padding: 4px;
+      cursor: pointer; display: flex;
+    }
+    .switch-thumb {
+      position: absolute; left: 4px; top: 4px;
+      width: calc(50% - 4px); height: 24px;
+      background: var(--blue); border-radius: 999px;
+      transition: transform 0.3s; transform: translateX(100%);
+    }
+    .switch-text {
+      position: relative; z-index: 1; flex: 1; text-align: center;
+      font-size: 11px; font-weight: 700; line-height: 24px; transition: color 0.3s;
+    }
+    .active-text { color: #fff; }
+    .inactive-text { color: var(--text-muted); }
+
+    .input-group {
+      flex: 1; display: flex; height: 40px;
+      border: 1px solid #d1d5db; border-radius: 4px;
+      background: #fff; overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .input-group:focus-within {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 1px var(--blue);
+    }
+    .input-prefix {
+      width: 36px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: #f9fafb; border-right: 1px solid var(--border);
+      color: var(--text-muted); font-size: 15px;
+    }
+    .input-field {
+      flex: 1; min-width: 0; border: 0; outline: 0;
+      text-align: right; padding: 0 12px;
+      font-size: 16px; font-weight: 600; background: transparent;
+    }
+
+    .fee-card {
+      flex: 1; padding: 10px;
+      background: #fff; border: 1px solid var(--border); border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      display: flex; flex-direction: column;
+    }
+    .fee-card-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .fee-card .btn-text { font-size: 10px; font-weight: 700; }
+    .fee-value { font-size: 20px; font-weight: 700; text-align: right; color: #d1d5db; }
+    .fee-value.active { color: var(--text); }
+
+    /* ── Tab 2: Date Calculator ── */
+    .date-scroll {
+      flex: 1; min-height: 0; overflow-y: auto;
+      display: flex; flex-direction: column;
+    }
+    .date-scroll::-webkit-scrollbar { width: 4px; }
+    .date-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+
+    .d-section {
+      flex-shrink: 0;
+      padding: 10px 24px;
+    }
+    .d-section + .d-section {
+      border-top: 1px solid var(--border);
+    }
+    .d-section-title {
+      padding: 0 0 8px; font-size: 12px; font-weight: 700;
+      color: var(--text);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .d-section-title .d-title-clear {
+      font-size: 10px; font-weight: 700; border: none; background: none;
+      color: var(--rose); cursor: pointer; padding: 0 2px;
+      letter-spacing: 0; transition: color 0.15s;
+    }
+    .d-section-title .d-title-clear:hover { color: var(--rose-dark); }
+    .d-section-body { display: flex; flex-direction: column; gap: 8px; }
+
+    .d-row { display: flex; flex-direction: column; gap: 6px; }
+    .d-row.inline { flex-direction: row; gap: 8px; align-items: center; }
+    .d-field-group { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+    .d-field-group > label { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+    .d-field-group.row-inline {
+      flex-direction: row; align-items: center; gap: 6px;
+    }
+    .d-field-group.row-inline > label { white-space: nowrap; margin-bottom: 0; }
+    .d-field-group.row-inline > .d-input { flex: 1; }
+
+    .d-input {
+      display: flex; height: 32px;
+      border: 1px solid #d1d5db; border-radius: 4px;
+      background: #fff; overflow: hidden;
+      transition: border-color 0.15s;
+    }
+    .d-input:focus-within { border-color: var(--blue); }
+    .d-input input[type="text"] {
+      flex: 1; min-width: 0; border: 0; outline: 0;
+      padding: 0 8px; font-size: 13px; background: transparent;
+      letter-spacing: 0.06em;
+    }
+    .d-input .d-cal {
+      position: relative; width: 30px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-left: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer; transition: color 0.15s;
+    }
+    .d-input .d-cal:hover { color: var(--blue); background: #f0f4ff; }
+    .d-input .d-cal input[type="date"] {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+    .d-input .d-clr {
+      width: 24px; flex-shrink: 0; border: 0; background: none;
+      color: #d1d5db; cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      transition: color 0.15s;
+    }
+    .d-input .d-clr:hover { color: var(--rose); }
+
+    .d-small-btn {
+      height: 32px; padding: 0 10px; font-size: 11px; font-weight: 700;
+      background: #fff; border: 1px solid #d1d5db; border-radius: 4px;
+      cursor: pointer; color: var(--text-muted); white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .d-small-btn:hover { color: var(--blue); border-color: var(--blue); }
+    .d-small-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .d-results {
+      display: flex; flex-direction: column; gap: 1px;
+      background: var(--border); border: 1px solid var(--border);
+      border-radius: 4px; overflow: hidden;
+    }
+    .dr-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 10px; background: #fff; gap: 8px;
+    }
+    .dr-row.accent { background: #eff6ff; }
+    .dr-label { font-size: 11px; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+    .dr-val {
+      font-size: 13px; font-weight: 700; color: var(--text); text-align: right;
+      cursor: pointer; transition: color 0.15s; word-break: break-all;
+    }
+    .dr-val:hover { color: var(--blue); }
+    .dr-val.placeholder { color: #d1d5db; cursor: default; }
+    .dr-val.placeholder:hover { color: #d1d5db; }
+
+    /* Age table */
+    .age-table {
+      display: flex; gap: 1px; background: var(--border);
+      border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+    }
+    .age-col {
+      flex: 1; display: flex; flex-direction: column;
+      background: #fff; padding: 6px 6px; text-align: center; gap: 3px;
+    }
+    .age-header {
+      font-size: 10px; font-weight: 700; color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .age-val {
+      font-size: 12px; font-weight: 700; color: var(--text);
+      cursor: pointer; transition: color 0.15s; white-space: nowrap;
+    }
+    .age-val:hover { color: var(--blue); }
+    .age-val.placeholder { color: #d1d5db; cursor: default; }
+    .age-val.placeholder:hover { color: #d1d5db; }
+
+    .d-divider {
+      display: flex; align-items: center; gap: 8px;
+      padding-top: 2px;
+    }
+    .d-divider::before {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .d-divider-text {
+      font-size: 11px; font-weight: 700; color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .d-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* Excluded period rows */
+    .exc-row {
+      display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+      padding: 5px 0; border-bottom: 1px solid #f3f4f6;
+    }
+    .exc-row:last-child { border-bottom: none; }
+    .exc-num {
+      width: 16px; text-align: right; font-size: 10px;
+      font-weight: 700; color: var(--text-muted); flex-shrink: 0;
+    }
+    .exc-input {
+      display: flex; height: 30px; flex: 1; min-width: 0;
+      border: 1px solid #d1d5db; border-radius: 3px;
+      background: #fff; overflow: hidden; transition: border-color 0.15s;
+    }
+    .exc-input:focus-within { border-color: var(--blue); }
+    .exc-input input[type="text"] {
+      flex: 1; min-width: 0; border: 0; outline: 0;
+      padding: 0 6px; font-size: 12px; background: transparent;
+      letter-spacing: 0.04em;
+    }
+    .exc-input .d-cal {
+      position: relative; width: 26px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      border-left: 1px solid var(--border);
+      color: var(--text-muted); cursor: pointer; font-size: 10px;
+    }
+    .exc-input .d-cal:hover { color: var(--blue); }
+    .exc-input .d-cal input[type="date"] {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+    .exc-sep { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+    .exc-days {
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      min-width: 40px; text-align: right; flex-shrink: 0;
+    }
+    .exc-del {
+      width: 22px; height: 22px; border: 1px solid #e5e7eb;
+      border-radius: 3px; background: #fff; color: var(--rose);
+      font-size: 14px; cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .exc-del:hover { background: #fef2f2; }
+
+    .exc-add-btn {
+      width: 100%; height: 26px; border: 1px dashed #d1d5db;
+      border-radius: 4px; background: none; cursor: pointer;
+      font-size: 11px; font-weight: 700; color: var(--text-muted);
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .exc-add-btn:hover { color: var(--blue); border-color: var(--blue); }
+
+    .exc-summary {
+      display: flex; align-items: center; justify-content: flex-end;
+      gap: 12px; padding: 4px 0 0; font-size: 11px;
+    }
+    .exc-summary-label { color: var(--text-muted); font-weight: 600; }
+    .exc-summary-val { font-weight: 700; color: var(--rose); }
+
+    /* Single-line result */
+    .d-result-line {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 6px 10px; background: #fff;
+      border: 1px solid var(--border); border-radius: 4px;
+      min-height: 32px; overflow-x: auto;
+    }
+    .d-result-line::-webkit-scrollbar { height: 3px; }
+    .d-result-line::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+    .d-result-line.accent { background: #eff6ff; border-color: #bfdbfe; }
+    .d-result-line .dr-val { white-space: nowrap; font-size: 12px; }
+
+    /* Direction toggle */
+    .dir-bar {
+      display: flex; border: 1px solid #d1d5db; border-radius: 4px;
+      overflow: hidden;
+    }
+    .dir-bar.dir-bar-compact { flex-shrink: 0; }
+    .dir-btn {
+      flex: 1; padding: 7px 8px; font-size: 11px; font-weight: 700;
+      text-align: center; border: none; cursor: pointer;
+      background: #fff; color: var(--text-muted); transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .dir-btn:first-child { border-right: 1px solid #d1d5db; }
+    .dir-btn.active { background: var(--blue); color: #fff; }
+
+    /* Offset result */
+    .offset-res {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; background: #eff6ff;
+      border: 1px solid #bfdbfe; border-radius: 4px;
+    }
+    .offset-res-label { font-size: 11px; font-weight: 700; color: var(--blue); }
+    .offset-res-val {
+      font-size: 15px; font-weight: 700; color: var(--blue-dark);
+      cursor: pointer;
+    }
+    .offset-res-val:hover { text-decoration: underline; }
+
+    /* Copied flash */
+    .flash-copied {
+      font-size: 10px; font-weight: 700; color: #16a34a;
+      margin-left: 4px; animation: fadeOut 1.5s forwards;
+    }
+    @keyframes fadeOut { 0%,60% { opacity: 1; } 100% { opacity: 0; } }
+
+    /* ── Tab 2: Deadline Calculator ── */
+    .dl-main {
+      flex: 1; padding: 10px 24px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .dl-main::-webkit-scrollbar { width: 4px; }
+    .dl-main::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+    .dl-footer {
+      flex-shrink: 0; padding: 10px 24px 12px;
+      background: var(--bg-panel); border-top: 1px solid var(--border);
+    }
+    .dl-row { display: flex; flex-direction: column; gap: 4px; }
+    .dl-row-inline { flex-direction: row; gap: 8px; align-items: flex-end; }
+    .dl-field { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+    .dl-field > .label-sm { font-size: 11px; }
+
+    .dl-select {
+      height: 32px; line-height: 30px; flex: 1; min-width: 0;
+      border: 1px solid #d1d5db; border-radius: 4px;
+      background: #fff; padding: 0 28px 0 10px; font-size: 13px;
+      color: var(--text); outline: 0; cursor: pointer;
+      transition: border-color 0.15s;
+      -webkit-appearance: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+    .dl-select:focus { border-color: var(--blue); }
+
+    .dl-switch {
+      position: relative; height: 32px;
+      background: #e5e7eb; border-radius: 999px; padding: 4px;
+      display: flex;
+    }
+    .dl-switch-thumb {
+      position: absolute; left: 4px; top: 4px;
+      height: 24px; background: var(--blue); border-radius: 999px;
+      transition: transform 0.3s, width 0.3s;
+    }
+    .dl-switch[data-count="2"] .dl-switch-thumb { width: calc(50% - 4px); }
+    .dl-switch[data-count="3"] .dl-switch-thumb { width: calc(33.333% - 3px); }
+    .dl-switch[data-count="4"] .dl-switch-thumb { width: calc(25% - 3px); }
+    .dl-switch[data-count="2"] .dl-switch-thumb.pos1 { transform: translateX(100%); }
+    .dl-switch[data-count="3"] .dl-switch-thumb.pos1 { transform: translateX(100%); }
+    .dl-switch[data-count="3"] .dl-switch-thumb.pos2 { transform: translateX(200%); }
+    .dl-switch[data-count="4"] .dl-switch-thumb.pos1 { transform: translateX(100%); }
+    .dl-switch[data-count="4"] .dl-switch-thumb.pos2 { transform: translateX(200%); }
+    .dl-switch[data-count="4"] .dl-switch-thumb.pos3 { transform: translateX(300%); }
+    .dl-switch[data-count="5"] .dl-switch-thumb { width: calc(20% - 1.6px); }
+    .dl-switch[data-count="5"] .dl-switch-thumb.pos1 { transform: translateX(100%); }
+    .dl-switch[data-count="5"] .dl-switch-thumb.pos2 { transform: translateX(200%); }
+    .dl-switch[data-count="5"] .dl-switch-thumb.pos3 { transform: translateX(300%); }
+    .dl-switch[data-count="5"] .dl-switch-thumb.pos4 { transform: translateX(400%); }
+    .dl-switch-item {
+      position: relative; z-index: 1; flex: 1; min-width: 0; text-align: center;
+      font-size: 11px; font-weight: 700; line-height: 24px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: color 0.3s;
+      user-select: none; cursor: pointer; color: var(--text-muted);
+      border: none; background: none; padding: 0 6px;
+    }
+    .dl-switch-item.active { color: #fff; }
+    .dl-switch[data-count="5"] .dl-switch-item {
+      font-size: 10px; padding: 0 2px; overflow: visible; text-overflow: unset;
+    }
+
+    .dl-period-grid {
+      display: flex; gap: 1px; background: var(--border);
+      border: 1px solid var(--border); border-radius: 4px;
+      overflow: hidden; margin-bottom: 8px;
+    }
+    .dl-period-col {
+      flex: 1; display: flex; flex-direction: column;
+      background: #fff; padding: 6px 6px; text-align: center; gap: 3px;
+    }
+    .dl-period-col.dl-period-total { background: #eff6ff; }
+    .dl-period-label {
+      font-size: 10px; font-weight: 700; color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .dl-period-val {
+      font-size: 14px; font-weight: 700; color: var(--text);
+    }
+    .dl-period-val.placeholder { color: #d1d5db; }
+
+    .dl-deadline {
+      display: flex; flex-direction: column; gap: 1px;
+      background: var(--border); border: 1px solid var(--border);
+      border-radius: 4px; overflow: hidden; margin-bottom: 4px;
+    }
+    .dl-deadline-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 10px; background: #fff; gap: 8px;
+    }
+    .dl-deadline-row.dl-deadline-final { background: #f0fdf4; }
+    .dl-res-label { font-size: 11px; font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+    .dl-res-val {
+      font-size: 13px; font-weight: 700; color: var(--text); text-align: right;
+      word-break: break-all;
+    }
+    .dl-res-val.placeholder { color: #d1d5db; }
+    .dl-res-val.final-val { color: #166534; font-size: 14px; }
+    .dl-res-val.loading { color: var(--text-muted); font-style: italic; font-weight: 600; }
+    .dl-res-val.error { color: var(--rose); font-size: 11px; }
+    .dl-note {
+      font-size: 10px; color: var(--text-muted); padding: 4px 0 0;
+      line-height: 1.5;
+    }
+
+  </style>
+</head>
+<body>
+  <!-- Tab Bar -->
+  <nav class="tab-bar">
+    <div class="tab-switch" id="tabSwitch">
+      <div class="tab-switch-thumb" id="tabSwitchThumb"></div>
+      <div class="tab-switch-text" data-tab="tabCalc">快速計算．裁判費</div>
+      <div class="tab-switch-text" data-tab="tabDeadline">救濟期間</div>
+      <div class="tab-switch-text" data-tab="tabDate">日期計算</div>
+    </div>
+    <span class="spacer"></span>
+    <button id="pinBtn" class="pin-btn" title="釘選至側邊面板">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <line x1="15" y1="3" x2="15" y2="21"/>
+      </svg>
+    </button>
+  </nav>
+
+  <!-- ═══ Tab 1: 民事速算機 ═══ -->
+  <div id="tabCalc" class="tab-panel active">
+    <main>
+      <textarea id="inputBox" placeholder="連續輸入數字或算式換行自動加總"></textarea>
+    </main>
+
+    <div class="tools-row">
+      <div class="tools-buttons">
+        <button id="copyEqBtn" class="btn-text btn-muted uppercase">複製算式</button>
+        <button id="copyAnsBtn" class="btn-text btn-muted uppercase">複製結果</button>
+        <button id="clearBtn" class="btn-text btn-rose uppercase">清除</button>
+      </div>
+      <div class="tools-result">
+        <span class="label uppercase">總計金額</span>
+        <div id="resultDisplay" class="result-display font-mono empty">0</div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="fee-header">
+        <span>裁判費試算</span>
+        <div class="switch-container" id="feeToggleContainer">
+          <div id="feeToggleThumb" class="switch-thumb"></div>
+          <div class="switch-text inactive-text" id="lblOld">113年12月前</div>
+          <div class="switch-text active-text" id="lblNew">114年1月起</div>
+        </div>
+      </div>
+
+      <div class="fee-input-row">
+        <div class="input-group">
+          <span class="input-prefix font-mono">$</span>
+          <input id="feeInput" class="input-field font-mono" type="text">
+        </div>
+        <div class="fee-actions">
+          <button id="useTotalBtn" class="btn-action">帶入上方計算結果</button>
+          <button id="clearFeeBtn" class="btn-action btn-rose">清除</button>
+        </div>
+      </div>
+
+      <div class="fee-cards">
+        <div class="fee-card">
+          <div class="fee-card-header">
+            <span class="label-sm uppercase">一審裁判費</span>
+            <button id="copyFirstBtn" class="btn-text btn-blue">複製</button>
+          </div>
+          <span id="feeFirst" class="fee-value font-mono">0</span>
+        </div>
+        <div class="fee-card">
+          <div class="fee-card-header">
+            <span class="label-sm uppercase">上訴裁判費</span>
+            <button id="copyAppealBtn" class="btn-text btn-blue">複製</button>
+          </div>
+          <span id="feeAppeal" class="fee-value font-mono">0</span>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ═══ Tab 2: 期間試算 ═══ -->
+  <div id="tabDeadline" class="tab-panel">
+    <div class="dl-main">
+
+      <!-- 原審法院 -->
+      <div class="dl-row">
+        <div class="dl-field">
+          <label class="label-sm">原審法院</label>
+          <select id="dlCourt" class="dl-select">
+            <optgroup label="高等法院">
+              <option value="TPH">臺灣高等法院</option>
+              <option value="TCH">臺灣高等法院臺中分院</option>
+              <option value="TNH">臺灣高等法院臺南分院</option>
+              <option value="KSH">臺灣高等法院高雄分院</option>
+              <option value="HLH">臺灣高等法院花蓮分院</option>
+              <option value="KMH">福建高等法院金門分院</option>
+            </optgroup>
+            <optgroup label="地方法院">
+                  <option value="KLD">臺灣基隆地方法院</option>
+                  <option value="SLD">臺灣士林地方法院</option>
+                  <option value="TPD">臺灣臺北地方法院</option>
+                  <option value="PCD">臺灣新北地方法院</option>
+                  <option value="TYD">臺灣桃園地方法院</option>
+                  <option value="SCD">臺灣新竹地方法院</option>
+                  <option value="MLD">臺灣苗栗地方法院</option>
+                  <option value="TCD">臺灣臺中地方法院</option>
+                  <option value="CHD">臺灣彰化地方法院</option>
+                  <option value="NTD">臺灣南投地方法院</option>
+                  <option value="ULD">臺灣雲林地方法院</option>
+                  <option value="CYD">臺灣嘉義地方法院</option>
+                  <option value="TND">臺灣臺南地方法院</option>
+                  <option value="CTD">臺灣橋頭地方法院</option>
+                  <option value="KSD">臺灣高雄地方法院</option>
+                  <option value="KSY">臺灣高雄少年及家事法院</option>
+                  <option value="PTD">臺灣屏東地方法院</option>
+                  <option value="ILD">臺灣宜蘭地方法院</option>
+                  <option value="HLD">臺灣花蓮地方法院</option>
+                  <option value="TTD">臺灣臺東地方法院</option>
+                  <option value="PHD">臺灣澎湖地方法院</option>
+                  <option value="KMD">福建金門地方法院</option>
+                  <option value="LCD">福建連江地方法院</option>
+                </optgroup>
+                <optgroup label="其他">
+                  <option value="IPC">智慧財產及商業法院</option>
+                </optgroup>
+          </select>
+        </div>
+      </div>
+
+      <!-- 類型 -->
+      <div class="dl-row">
+        <div class="dl-field">
+          <label class="label-sm">類型</label>
+          <div class="dl-switch" id="dlAppealType" data-count="4">
+            <div class="dl-switch-thumb"></div>
+            <button class="dl-switch-item active" data-val="hearing" type="button">就審</button>
+            <button class="dl-switch-item" data-val="appeal" type="button">上訴</button>
+            <button class="dl-switch-item" data-val="protest" type="button">抗告</button>
+            <button class="dl-switch-item" data-val="retrial" type="button">再審</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 訴代居住法院所在地 (條件顯示) -->
+      <div class="dl-row" id="dlAgentRow" style="display:none">
+        <div class="dl-field">
+          <label class="label-sm" id="dlAgentLabel">受特別委任訴代居住法院所在地</label>
+          <div class="dl-switch" id="dlAgent" data-count="2">
+            <div class="dl-switch-thumb pos1"></div>
+            <button class="dl-switch-item" data-val="yes" type="button">有</button>
+            <button class="dl-switch-item active" data-val="no" type="button">無</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 就審/抗告天數 (條件顯示) -->
+      <div class="dl-row" id="dlSubDaysRow" style="display:none">
+        <div class="dl-field">
+          <label class="label-sm" id="dlSubDaysLabel">天數</label>
+          <div class="dl-switch" id="dlSubDays" data-count="2">
+            <div class="dl-switch-thumb"></div>
+            <button class="dl-switch-item active" data-val="first" type="button">—</button>
+            <button class="dl-switch-item" data-val="second" type="button">—</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 送達方式 -->
+      <div class="dl-row">
+        <div class="dl-field">
+          <label class="label-sm">送達方式</label>
+          <div class="dl-switch" id="dlService" data-count="5">
+            <div class="dl-switch-thumb"></div>
+            <button class="dl-switch-item active" data-val="normal" type="button">一般</button>
+            <button class="dl-switch-item" data-val="deposit" type="button">寄存</button>
+            <button class="dl-switch-item" data-val="public_domestic" type="button">首次國內公送</button>
+            <button class="dl-switch-item" data-val="public_foreign" type="button">首次國外公送</button>
+            <button class="dl-switch-item" data-val="public_again" type="button">再次公送</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 住居所 + 收受日 + 清除 -->
+      <div class="dl-row dl-row-inline">
+        <div class="dl-field">
+          <label class="label-sm">當事人住居所</label>
+          <select id="dlLocation" class="dl-select">
+                <optgroup label="臺灣">
+                  <option value="臺北市">臺北市</option>
+                  <option value="新北市">新北市</option>
+                  <option value="基隆市">基隆市</option>
+                  <option value="宜蘭縣">宜蘭縣</option>
+                  <option value="桃園市">桃園市</option>
+                  <option value="新竹市">新竹市</option>
+                  <option value="新竹縣">新竹縣</option>
+                  <option value="苗栗縣">苗栗縣</option>
+                  <option value="臺中市">臺中市</option>
+                  <option value="彰化縣">彰化縣</option>
+                  <option value="南投縣">南投縣</option>
+                  <option value="雲林縣">雲林縣</option>
+                  <option value="嘉義市">嘉義市</option>
+                  <option value="嘉義縣">嘉義縣</option>
+                  <option value="臺南市">臺南市</option>
+                  <option value="高雄市">高雄市</option>
+                  <option value="屏東縣">屏東縣</option>
+                  <option value="花蓮縣">花蓮縣</option>
+                  <option value="臺東縣">臺東縣</option>
+                  <option value="澎湖縣">澎湖縣</option>
+                  <option value="金門縣">金門縣</option>
+                  <option value="連江縣">連江縣</option>
+                </optgroup>
+                <optgroup label="大陸或港澳地區">
+                  <option value="大陸或港澳">大陸或港澳地區</option>
+                </optgroup>
+                <optgroup label="國外">
+                  <option value="亞洲">亞洲</option>
+                  <option value="歐洲">歐洲</option>
+                  <option value="北美洲">北美洲</option>
+                  <option value="南美洲">南美洲</option>
+                  <option value="大洋洲">大洋洲</option>
+                  <option value="非洲">非洲</option>
+                </optgroup>
+          </select>
+        </div>
+        <div class="dl-field">
+          <label class="label-sm">收受日</label>
+          <div class="d-input">
+            <input id="dlDate" type="text" class="font-mono" maxlength="8">
+            <div class="d-cal" title="選擇日期">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <input type="date" tabindex="-1">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <button id="dlClearBtn" class="btn-text btn-rose" type="button" style="font-size:11px;font-weight:700;">清除</button>
+      </div>
+
+    </div>
+
+    <footer class="dl-footer">
+      <div class="dl-period-grid">
+        <div class="dl-period-col">
+          <span class="dl-period-label">不變期間</span>
+          <span id="dlResA" class="dl-period-val placeholder font-mono">—</span>
+        </div>
+        <div class="dl-period-col">
+          <span class="dl-period-label">在途期間</span>
+          <span id="dlResB" class="dl-period-val placeholder font-mono">—</span>
+        </div>
+        <div class="dl-period-col">
+          <span class="dl-period-label">送達生效</span>
+          <span id="dlResC" class="dl-period-val placeholder font-mono">—</span>
+        </div>
+        <div class="dl-period-col dl-period-total">
+          <span class="dl-period-label">總期間</span>
+          <span id="dlResTotal" class="dl-period-val placeholder font-mono">—</span>
+        </div>
+      </div>
+      <div class="dl-deadline">
+        <div class="dl-deadline-row">
+          <span class="dl-res-label">末日（未考慮假日）</span>
+          <span id="dlResRaw" class="dl-res-val placeholder font-mono">—</span>
+        </div>
+        <div class="dl-deadline-row dl-deadline-final">
+          <span class="dl-res-label">末日（已考慮假日）</span>
+          <span id="dlResFinal" class="dl-res-val placeholder font-mono">—</span>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ═══ Tab 3: 日期速算機 ═══ -->
+  <div id="tabDate" class="tab-panel">
+    <div class="date-scroll">
+
+      <!-- Section 1: 日期區間計算 -->
+      <div class="d-section">
+        <div class="d-section-title"><span>日期區間計算</span><button id="dateRangeClear" class="d-title-clear" type="button">清除</button></div>
+        <div class="d-section-body">
+          <div class="d-row inline">
+            <div class="d-field-group">
+              <div class="d-input">
+                <input id="dateStart" type="text" class="font-mono" maxlength="8" placeholder="起日">
+                <div class="d-cal" title="選擇日期">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <input type="date" tabindex="-1">
+                </div>
+              </div>
+            </div>
+            <button id="dateStartTodayBtn" class="d-small-btn" title="起日設為今天">今日</button>
+            <div class="d-field-group">
+              <div class="d-input">
+                <input id="dateEnd" type="text" class="font-mono" maxlength="8" placeholder="迄日">
+                <div class="d-cal" title="選擇日期">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <input type="date" tabindex="-1">
+                </div>
+              </div>
+            </div>
+            <button id="dateTodayBtn" class="d-small-btn" title="迄日設為今天">今日</button>
+          </div>
+
+          <div class="d-result-line" id="dateResultLine">
+            <span id="dateResultText" class="dr-val placeholder font-mono">—</span>
+          </div>
+
+          <!-- Excluded periods -->
+          <div class="d-divider">
+            <span class="d-divider-text">扣除區間</span>
+          </div>
+          <div id="excList"></div>
+          <button id="excAddBtn" class="exc-add-btn" type="button">＋ 新增扣除區間</button>
+
+          <div id="excSummary" class="exc-summary" style="display:none">
+            <span class="exc-summary-label">扣除</span>
+            <span id="excTotalDays" class="exc-summary-val font-mono">0日</span>
+          </div>
+
+          <div id="excResults" class="d-result-line accent" style="display:none">
+            <span class="dr-label" style="flex-shrink:0">扣除後</span>
+            <span id="netResultText" class="dr-val placeholder font-mono">—</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Section 2: 日期推算 -->
+      <div class="d-section">
+        <div class="d-section-title"><span>日期推算</span><button id="dateOffsetClear" class="d-title-clear" type="button">清除</button></div>
+        <div class="d-section-body">
+          <div class="d-row inline">
+            <div class="d-field-group row-inline">
+              <label>基準日</label>
+              <div class="d-input">
+                <input id="offBase" type="text" class="font-mono" maxlength="8">
+                <div class="d-cal" title="選擇日期">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <input type="date" tabindex="-1">
+                </div>
+              </div>
+            </div>
+            <button id="offTodayBtn" class="d-small-btn" title="設為今天">今日</button>
+            <div class="dir-bar dir-bar-compact">
+              <button class="dir-btn active" data-dir="back" type="button">回推</button>
+              <button class="dir-btn" data-dir="forward" type="button">起算</button>
+            </div>
+          </div>
+          <div class="d-row inline">
+            <div class="d-field-group row-inline">
+              <label style="flex-shrink:0">期間</label>
+              <div class="d-input"><input id="offYY" type="text" class="font-mono" maxlength="2" placeholder="年"></div>
+              <div class="d-input"><input id="offMM" type="text" class="font-mono" maxlength="2" placeholder="月"></div>
+              <div class="d-input"><input id="offDD" type="text" class="font-mono" maxlength="2" placeholder="日"></div>
+            </div>
+          </div>
+
+          <div class="offset-res">
+            <span class="offset-res-label">推算結果</span>
+            <span id="offResult" class="offset-res-val font-mono">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: 年齡推算 -->
+      <div class="d-section">
+        <div class="d-section-title"><span>年齡推算</span><button id="dateAgeClear" class="d-title-clear" type="button">清除</button></div>
+        <div class="d-section-body">
+          <div class="d-field-group row-inline">
+            <label>出生年月日</label>
+            <div class="d-input">
+              <input id="ageBirth" type="text" class="font-mono" maxlength="8">
+              <div class="d-cal" title="選擇日期">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <input type="date" tabindex="-1">
+              </div>
+            </div>
+          </div>
+
+          <div class="age-table" id="ageResults">
+            <div class="age-col">
+              <span class="age-header">今日年齡</span>
+              <span id="ageNow" class="age-val placeholder font-mono">—</span>
+            </div>
+            <div class="age-col">
+              <span class="age-header" id="ageAdultLabel">成年日</span>
+              <span id="ageAdult" class="age-val placeholder font-mono">—</span>
+            </div>
+            <div class="age-col">
+              <span class="age-header">滿65歲日</span>
+              <span id="age65" class="age-val placeholder font-mono">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
