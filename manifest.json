@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "民事速算機",
-  "version": "1.4",
+  "version": "2.0",
   "description": "民事速算工具：金額計算、裁判費試算、期間試算、日期速算。",
   "permissions": ["storage", "sidePanel"],
   "host_permissions": [

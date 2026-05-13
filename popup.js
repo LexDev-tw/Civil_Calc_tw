@@ -324,7 +324,7 @@ const DC = {
 
   formatOneLine(res) {
     if (!res) return '—';
-    const { totalDays, y, m, d, remY, daysInY, remM, daysInM } = res;
+    const { totalDays, y, m, remY, daysInY, remM, daysInM } = res;
     const ymd = this.formatYMD(res);
     const totalYears = y + (daysInY > 0 ? remY / daysInY : 0);
     const totalMo = y * 12 + m;
@@ -855,7 +855,6 @@ function getTransitDays(courtCode, location) {
 class DeadlineCalculatorManager {
   constructor(holidayService) {
     this.hs = holidayService;
-    this.caseType = 'civil';
     this.appealType = 'hearing';
     this.pendingCalc = 0;
 
@@ -866,7 +865,6 @@ class DeadlineCalculatorManager {
   }
 
   bindSegments() {
-    this.caseType = 'civil';
     this.hasAgentAtCourt = false;
     this.setupSeg('dlAppealType', val => {
       this.appealType = val;
