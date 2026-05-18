@@ -1,7 +1,16 @@
 const FMT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 });
 const $ = id => document.getElementById(id);
 
-function copyText(text) { navigator.clipboard.writeText(text); }
+function copyText(text) {
+  navigator.clipboard.writeText(text).catch(() => {});
+}
+
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/"/g, '&quot;');
+}
 
 function flashBtn(btn, text, color) {
   const orig = btn.textContent, origColor = btn.style.color;
@@ -122,9 +131,16 @@ class CourtFeeManager {
   useTotal(btn) {
     const sum = Math.floor(this.ui.currentSum);
     if (sum <= 0) return;
-    this.el.input.value = FMT.format(sum);
+    this.importAmount(sum, btn);
+  }
+
+  importAmount(sum, btn) {
+    const val = Math.floor(Number(sum) || 0);
+    if (val <= 0) return false;
+    this.el.input.value = FMT.format(val);
     this.calc();
-    flashBtn(btn, '已帶入✓', '#16a34a');
+    if (btn) flashBtn(btn, '已帶入✓', '#16a34a');
+    return true;
   }
 
   clear(btn) {
@@ -294,28 +310,6 @@ const DC = {
     if (m) s += `${m}月`;
     if (d || (!y && !m)) s += `${d}日`;
     return s.trim();
-  },
-
-  formatDays(res) {
-    if (!res) return '—';
-    return `${res.totalDays.toLocaleString()}日`;
-  },
-
-  formatMonths(res) {
-    if (!res) return '—';
-    const { y, m, remM, daysInM } = res;
-    const totalMo = y * 12 + m;
-    return remM
-      ? `${totalMo ? `${totalMo}月 ` : ''}${remM}/${daysInM}月`
-      : `${totalMo}月`;
-  },
-
-  formatYears(res) {
-    if (!res) return '—';
-    const { y, remY, daysInY } = res;
-    return remY
-      ? `${y ? `${y}年 ` : ''}${remY}/${daysInY}年`
-      : `${y}年`;
   },
 
   r2(n) {
@@ -871,7 +865,7 @@ class DeadlineCalculatorManager {
       this.updateSubDays();
       this.calc();
     });
-    this.subDaysVal = 'first';
+    this.subDaysVal = '5';
     this.setupSeg('dlSubDays', val => { this.subDaysVal = val; this.calc(); });
     this.setupSeg('dlAgent', val => {
       this.hasAgentAtCourt = (val === 'yes');
@@ -1101,21 +1095,695 @@ class DeadlineCalculatorManager {
 }
 
 /* ══════════════════════════════════════════
+   Delay Interest (遲延利息)
+   ══════════════════════════════════════════ */
+
+const IU = {
+  num(val) {
+    return Number(String(val || '').replace(/[^\d.-]/g, '')) || 0;
+  },
+
+  formatMoney(val) {
+    if (!val && val !== 0) return '';
+    const parts = String(val).replace(/[^\d.-]/g, '').split('.');
+    parts[0] = parts[0] ? Number(parts[0]).toLocaleString('en-US') : '';
+    return parts.join('.');
+  },
+
+  formatYears(res) {
+    if (!res) return '';
+    const { y, remY, daysInY } = res;
+    return remY ? `${y ? `${y}年 ` : ''}${remY}/${daysInY}年` : `${y}年`;
+  },
+
+  calcDelayInterestRaw(p, rAnnual, dateDiffRes) {
+    if (!dateDiffRes || p <= 0 || rAnnual <= 0) return { raw: 0, display: '' };
+    const { y, remY, daysInY } = dateDiffRes;
+    let raw = p * rAnnual * y;
+    if (remY > 0 && daysInY > 0) raw += p * rAnnual * (remY / daysInY);
+    return { raw, display: IU.formatYears(dateDiffRes) };
+  },
+
+  formatInterest(raw) {
+    if (!raw && raw !== 0) return '';
+    const n = Math.round(Number(raw) * 100) / 100;
+    return n.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+  }
+};
+
+const INT_CAL_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+
+class InterestCalculatorManager {
+  constructor(feeManager, tabManager) {
+    this.feeManager = feeManager;
+    this.tabManager = tabManager;
+    this.container = $('intGroups');
+    this.nextId = 1;
+    this.groups = [this.newGroup()];
+
+    this.container.addEventListener('input', e => this.onInput(e));
+    this.container.addEventListener('click', e => this.onClick(e));
+    $('intResetBtn').addEventListener('click', () => this.reset());
+    $('intPrintBtn').addEventListener('click', () => this.print());
+    $('intImportFeeBtn').addEventListener('click', e => this.importToFee(e.target));
+
+    this.render();
+  }
+
+  newGroup() {
+    const gid = this.nextId++;
+    return {
+      id: gid,
+      a: '',
+      segments: [{ id: this.nextId++, p: '', r: '5', s: '', e: '' }]
+    };
+  }
+
+  newSegment() {
+    return { id: this.nextId++, p: '', r: '5', s: '', e: '' };
+  }
+
+  findGroup(gid) {
+    return this.groups.find(g => g.id === gid);
+  }
+
+  findSegment(g, sid) {
+    return g.segments.find(s => s.id === sid);
+  }
+
+  compute() {
+    let totalA = 0;
+    let sumIntRaw = 0;
+    let htmlRows = '';
+    const rows = [];
+
+    const computedGroups = this.groups.map((g, gIdx) => {
+      const aNum = IU.num(g.a);
+      totalA += aNum;
+      let groupIntRaw = 0;
+      const computedSegments = g.segments.map((seg, sIdx) => {
+        const bNum = IU.num(seg.p);
+        const rDec = IU.num(seg.r) / 100;
+        const ds = DC.parseDate(seg.s);
+        const de = DC.parseDate(seg.e);
+        let interestRaw = 0;
+        let hasCalc = false;
+        const dateDiffRes = ds && de && ds <= de ? DC.calcDateDiff(ds, de) : null;
+        const yearDisplay = IU.formatYears(dateDiffRes);
+        if (dateDiffRes && bNum > 0 && IU.num(seg.r) > 0) {
+          interestRaw = IU.calcDelayInterestRaw(bNum, rDec, dateDiffRes).raw;
+          hasCalc = true;
+          sumIntRaw += interestRaw;
+          const cell = IU.formatInterest(interestRaw);
+          htmlRows += `<tr><td>本金群組 ${gIdx + 1} 期間${sIdx + 1}</td><td class="text-right">${bNum.toLocaleString()}</td><td>${DC.formatTW(ds)}</td><td>${DC.formatTW(de)}</td><td>${seg.r}%</td><td>${yearDisplay}</td><td class="text-right">${cell}</td></tr>`;
+          rows.push({ gIdx: gIdx + 1, sIdx: sIdx + 1, bNum, ds, de, rate: seg.r, yearDisplay, cell });
+        }
+        groupIntRaw += interestRaw;
+        return { ...seg, interestRaw, yearDisplay, hasCalc, interestDisplay: hasCalc ? IU.formatInterest(interestRaw) : '' };
+      });
+      return { ...g, numericA: aNum, computedSegments, groupIntRaw };
+    });
+
+    const totalInt = Math.round(sumIntRaw);
+    const grandTotal = totalA + totalInt;
+    return {
+      valid: grandTotal > 0,
+      hasPrintRows: rows.length > 0,
+      totalA,
+      totalInt,
+      grandTotal,
+      computedGroups,
+      htmlRows
+    };
+  }
+
+  render() {
+    const res = this.compute();
+    this.container.innerHTML = res.computedGroups.map((g, i) => this.groupHtml(g, i, res.computedGroups.length)).join('');
+    this.container.querySelectorAll('.d-cal').forEach(cal => this.setupCalendar(cal));
+    this.updateSummary(res);
+  }
+
+  refreshResults() {
+    const res = this.compute();
+    res.computedGroups.forEach(g => {
+      const el = this.container.querySelector(`[data-gid="${g.id}"]`);
+      if (!el) return;
+      g.computedSegments.forEach(seg => {
+        const row = el.querySelector(`[data-sid="${seg.id}"]`);
+        if (!row) return;
+        const years = row.querySelector('.ic-years');
+        if (years) years.textContent = this.periodYearsLabel(seg);
+      });
+      const foot = el.querySelector('.ic-card__foot');
+      if (foot) foot.outerHTML = this.cardFootHtml(g);
+    });
+    this.updateSummary(res);
+  }
+
+  updateSummary(res) {
+    $('intTotalA').textContent = `$${res.totalA.toLocaleString()}`;
+    $('intTotalInt').textContent = `$${res.totalInt.toLocaleString()}`;
+    $('intGrandTotal').textContent = `$${res.grandTotal.toLocaleString()}`;
+    $('intPrintBtn').disabled = !res.hasPrintRows;
+    $('intImportFeeBtn').disabled = !res.valid;
+  }
+
+  moneyInput(field, value, accent = false) {
+    const cls = accent ? 'ic-money ic-money--p ic-money--w9' : 'ic-money ic-money--w9';
+    return `<div class="${cls}">
+      <span class="ic-money__pre">$</span>
+      <input type="text" data-field="${field}" value="${escHtml(IU.formatMoney(value))}" inputmode="numeric">
+    </div>`;
+  }
+
+  dateInput(field, value) {
+    return `<div class="ic-date-7">
+      <input type="text" data-field="${field}" class="font-mono" maxlength="8" value="${escHtml(value)}">
+      <div class="d-cal" title="選擇日期">${INT_CAL_SVG}<input type="date" tabindex="-1"></div>
+    </div>`;
+  }
+
+  cardFootHtml(g) {
+    const sum = IU.formatInterest(g.numericA + g.groupIntRaw);
+    return `<div class="ic-card__foot">
+      <div class="ic-stat">本金<b>$${g.numericA.toLocaleString()}</b></div>
+      <div class="ic-stat">利息<b class="accent">$${IU.formatInterest(g.groupIntRaw)}</b></div>
+      <div class="ic-stat">合計<b class="grand">$${sum}</b></div>
+    </div>`;
+  }
+
+  groupHtml(g, index, groupCount) {
+    const segs = g.computedSegments.map((seg, sIdx) => this.segHtml(g.id, seg, sIdx)).join('');
+    const n = String(index + 1).padStart(2, '0');
+    return `
+      <article class="ic-card" data-gid="${g.id}">
+        <header class="ic-card__head">
+          <span class="ic-badge">${n}</span>
+          <span class="ic-lbl">本金</span>
+          ${this.moneyInput('a', g.a)}
+          <div class="ic-tools">
+            <button type="button" class="ic-btn" data-action="add-group" title="新增本金群組">+</button>
+            <button type="button" class="ic-btn ic-btn--del" data-action="del-group" title="刪除此群組" ${groupCount <= 1 ? 'disabled' : ''}>×</button>
+          </div>
+        </header>
+        ${segs}
+        ${this.cardFootHtml(g)}
+      </article>`;
+  }
+
+  periodYearsLabel(seg) {
+    if (!seg.yearDisplay) return '';
+    return `${seg.yearDisplay}${seg.interestDisplay ? ` · $${seg.interestDisplay}` : ''}`;
+  }
+
+  segHtml(gid, seg, sIdx) {
+    const years = this.periodYearsLabel(seg);
+    return `
+      <section class="ic-period" data-gid="${gid}" data-sid="${seg.id}">
+        <div class="ic-period__bar">
+          <span class="ic-period__title">利息/違約金 #${sIdx + 1}</span>
+          <div class="ic-tools">
+            <button type="button" class="ic-btn" data-action="add-seg" title="新增利息/違約金">+</button>
+            <button type="button" class="ic-btn ic-btn--del" data-action="del-seg" title="刪除此項">×</button>
+          </div>
+        </div>
+        <div class="ic-form">
+          <div class="ic-form__principal">
+            <span class="ic-lbl">計息本金</span>
+            ${this.moneyInput('p', seg.p, true)}
+            <span class="ic-years">${years}</span>
+          </div>
+          <div class="ic-form__dates">
+            <div class="ic-form__dates-row">
+              <span class="ic-lbl">起日</span>
+              ${this.dateInput('s', seg.s)}
+              <span class="ic-date-sep">-</span>
+              <span class="ic-lbl">迄日</span>
+              ${this.dateInput('e', seg.e)}
+            </div>
+            <div class="ic-form__rate">
+              <span class="ic-lbl">年息</span>
+              <input type="text" class="ic-rate" data-field="r" value="${escHtml(seg.r)}">
+              <span class="ic-pct">%</span>
+            </div>
+          </div>
+        </div>
+      </section>`;
+  }
+
+  setupCalendar(calEl) {
+    const native = calEl.querySelector('input[type="date"]');
+    const text = calEl.closest('.d-input, .ic-date-7').querySelector('input[type="text"]');
+    if (!native || !text) return;
+    native.addEventListener('change', () => {
+      if (!native.value) return;
+      text.value = DC.nativeDateToTW(native.value);
+      native.value = '';
+      text.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  onInput(e) {
+    const input = e.target;
+    const field = input.dataset.field;
+    if (!field) return;
+    const row = input.closest('[data-sid]');
+    const groupEl = input.closest('[data-gid]');
+    if (!row && field !== 'a') return;
+    const gid = Number((groupEl || row).dataset.gid);
+    const g = this.findGroup(gid);
+    if (!g) return;
+
+    if (field === 'a') {
+      g.a = input.value.replace(/[^\d]/g, '').slice(0, 9);
+      input.value = IU.formatMoney(g.a);
+    } else {
+      const sid = Number(row.dataset.sid);
+      const seg = this.findSegment(g, sid);
+      if (!seg) return;
+      if (field === 'p') {
+        seg.p = input.value.replace(/[^\d]/g, '').slice(0, 9);
+        input.value = IU.formatMoney(seg.p);
+      } else if (field === 'r') {
+        seg.r = input.value.replace(/[^\d.]/g, '');
+        input.value = seg.r;
+      } else if (field === 's' || field === 'e') {
+        seg[field] = input.value.replace(/\D/g, '').slice(0, 8);
+        input.value = seg[field];
+      }
+    }
+    this.refreshResults();
+  }
+
+  onClick(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn || btn.disabled) return;
+    const action = btn.dataset.action;
+    const groupEl = btn.closest('[data-gid]');
+    const row = btn.closest('[data-sid]');
+    const gid = groupEl ? Number(groupEl.dataset.gid) : null;
+
+    if (action === 'add-group') {
+      this.groups.push(this.newGroup());
+      this.render();
+      return;
+    }
+    if (action === 'del-group' && this.groups.length > 1) {
+      this.groups = this.groups.filter(g => g.id !== gid);
+      this.render();
+      return;
+    }
+    const g = this.findGroup(gid);
+    if (!g) return;
+    const sid = row ? Number(row.dataset.sid) : null;
+    const sIdx = g.segments.findIndex(s => s.id === sid);
+
+    if (action === 'add-seg') {
+      g.segments.splice(sIdx + 1, 0, this.newSegment());
+      this.render();
+    } else if (action === 'del-seg') {
+      if (g.segments.length <= 1) {
+        const seg = g.segments[0];
+        seg.p = ''; seg.s = ''; seg.e = ''; seg.r = '5';
+      } else {
+        g.segments = g.segments.filter(s => s.id !== sid);
+      }
+      this.render();
+    }
+  }
+
+  reset() {
+    this.nextId = 1;
+    this.groups = [this.newGroup()];
+    this.render();
+  }
+
+  print() {
+    const res = this.compute();
+    if (!res.hasPrintRows) return;
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>遲延利息試算明細</title><style>body{font-family:'Microsoft JhengHei',sans-serif;padding:30px;line-height:1.6;color:#000}table{width:100%;border-collapse:collapse;margin:15px 0;font-size:14px}th,td{border:1px solid #333;padding:8px;text-align:center}th{background:#f4f4f5}.text-right{text-align:right}h2{border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:20px;text-align:center}.total-row td{font-weight:bold;background:#fafafa}.summary{border:2px solid #000;padding:20px;margin-top:30px;font-size:16px;background:#f8fafc}</style></head><body><h2>遲延利息試算明細</h2><p><strong>請求金額合計：</strong> ${res.totalA.toLocaleString()} 元　<strong>總利息：</strong> ${res.totalInt.toLocaleString()} 元</p><table><thead><tr><th>列項</th><th class="text-right">計息本金</th><th>計息起日</th><th>計息迄日</th><th>年息</th><th>折算年數</th><th class="text-right">各期利息（元）</th></tr></thead><tbody>${res.htmlRows}<tr class="total-row"><td colspan="6" class="text-right">利息總計</td><td class="text-right">${res.totalInt.toLocaleString()}</td></tr></tbody></table><div class="summary"><strong>請求總額（A＋C）：</strong> <span style="font-size:20px;color:#b91c1c;">${res.grandTotal.toLocaleString()}</span> 元</div></body></html>`);
+    win.document.close();
+    setTimeout(() => win.print(), 250);
+  }
+
+  importToFee(btn) {
+    const res = this.compute();
+    if (!res.valid) return;
+    if (this.feeManager.importAmount(res.grandTotal, btn)) {
+      this.tabManager.activate('tabCalc');
+    }
+  }
+}
+
+/* ══════════════════════════════════════════
+   Vehicle Depreciation (車輛修復費折舊)
+   ══════════════════════════════════════════ */
+
+const DEP_RATES = {
+  motorcycle: { rate: 0.536, limitY: 3, label: '機車' },
+  transport: { rate: 0.438, limitY: 4, label: '運輸業用客車、貨車' },
+  'non-transport': { rate: 0.369, limitY: 5, label: '非運輸業用客車、貨車' }
+};
+
+function parseMfgDate(str) {
+  let parseTarget = String(str || '').replace(/[^\d]/g, '');
+  if (!parseTarget) return null;
+  if (parseTarget.length <= 4) parseTarget += '0101';
+  else if (parseTarget.length === 5) parseTarget += '01';
+  else if (parseTarget.length === 6 && (parseTarget.startsWith('19') || parseTarget.startsWith('20'))) {
+    parseTarget += '01';
+  }
+  return DC.parseDate(parseTarget);
+}
+
+function getDepConfig(state) {
+  if (state.type === 'custom') {
+    const limitY = Math.max(1, parseInt(state.yrs, 10) || 0);
+    if (!limitY) return { rate: 0, limitY: 0, label: '系爭車輛' };
+    const rate = Math.round((1 - Math.pow(0.1, 1 / limitY)) * 1000) / 1000;
+    return { rate, limitY, label: '系爭車輛' };
+  }
+  return DEP_RATES[state.type] || DEP_RATES['non-transport'];
+}
+
+function computeDepreciation(state) {
+  const cfg = getDepConfig(state);
+  const rate = cfg.rate;
+  const limitY = cfg.limitY;
+
+  const dMfg = parseMfgDate(state.mfg);
+  const dAcc = DC.parseDate(state.acc);
+  const valid = Boolean(dMfg && dAcc && dAcc >= dMfg);
+
+  let usageM = 0;
+  if (valid) {
+    usageM = (dAcc.getFullYear() - dMfg.getFullYear()) * 12
+      + dAcc.getMonth() - dMfg.getMonth()
+      + (dAcc.getDate() > dMfg.getDate() ? 1 : 0);
+    if (usageM <= 0) usageM = 1;
+  }
+
+  const c = {
+    p: IU.num(state.parts),
+    l: IU.num(state.labor),
+    pt: IU.num(state.paint),
+    m: IU.num(state.metal),
+    o: IU.num(state.other)
+  };
+
+  let text = '';
+  let tableText = '';
+  const preTotal = c.p + c.l + c.pt + c.m + c.o;
+  let totalVal = c.l + c.pt + c.m + c.o;
+  let residual = c.p;
+  let usageText = '';
+
+  if (valid) {
+    const y = Math.floor(usageM / 12);
+    const m = usageM % 12;
+    usageText = `${y > 0 ? `${y}年` : ''}${m > 0 || y === 0 ? `${m}月` : ''}`;
+  }
+
+  if (valid && c.p > 0) {
+    const typeLabel = cfg.label;
+    const mfgStr = `${dMfg.getFullYear() - 1911}年${dMfg.getMonth() + 1}月`;
+
+    tableText = '\n\n附表：\n折舊時間\t\t金額\n';
+    let currentVal = c.p;
+    let totalDep = 0;
+    const limit = Math.round(c.p * 0.9);
+    const fullYears = Math.floor(usageM / 12);
+    const remMonths = usageM % 12;
+    const totalSteps = remMonths > 0 ? fullYears + 1 : fullYears;
+
+    for (let i = 1; i <= Math.max(totalSteps, 1); i++) {
+      if (limitY > 0 && i > limitY) {
+        tableText += `第${i}年折舊值\t\t0\n第${i}年折舊後價值\t${currentVal.toLocaleString()}-0=${currentVal.toLocaleString()}\n`;
+        continue;
+      }
+      let depVal = 0;
+      let calcStr = '';
+      const originalCalc = Math.round(currentVal * rate * (i <= fullYears ? 1 : (remMonths / 12)));
+      if (totalDep + originalCalc > limit) {
+        depVal = Math.max(limit - totalDep, 0);
+        calcStr = `${currentVal.toLocaleString()}×${rate}${i <= fullYears ? '' : `×(${remMonths}/12)`}=${originalCalc.toLocaleString()} (受殘值1/10限制，截為${depVal.toLocaleString()})`;
+      } else {
+        depVal = originalCalc;
+        calcStr = `${currentVal.toLocaleString()}×${rate}${i <= fullYears ? '' : `×(${remMonths}/12)`}=${depVal.toLocaleString()}`;
+      }
+      if (depVal === 0 && currentVal <= c.p - limit) calcStr = '0 (已達殘值下限)';
+
+      tableText += `第${i}年折舊值\t\t${calcStr}\n`;
+      const newVal = currentVal - depVal;
+      tableText += `第${i}年折舊後價值\t${currentVal.toLocaleString()}-${depVal.toLocaleString()}=${newVal.toLocaleString()}\n`;
+      currentVal = newVal;
+      totalDep += depVal;
+    }
+    residual = currentVal;
+    totalVal += residual;
+
+    const nonDepItems = [];
+    if (c.l > 0) nonDepItems.push(`工資 ${c.l.toLocaleString()} 元`);
+    if (c.pt > 0) nonDepItems.push(`烤漆 ${c.pt.toLocaleString()} 元`);
+    if (c.m > 0) nonDepItems.push(`鈑金 ${c.m.toLocaleString()} 元`);
+    if (c.o > 0) nonDepItems.push(`其他 ${c.o.toLocaleString()} 元`);
+
+    text = `依行政院「固定資產耐用年數表」及「折舊率表」規定，${typeLabel}耐用年數為 ${limitY} 年，依定率遞減法折舊千分之 ${Math.round(rate * 1000)}。查系爭車輛自${mfgStr}出廠，迄折舊基準日已使用${usageText}，零件扣除折舊後估定為 ${residual.toLocaleString()} 元`;
+
+    if (nonDepItems.length > 0) {
+      text += `，加計無庸扣除折舊之${nonDepItems.join('、')}後，原告得請求 ${totalVal.toLocaleString()} 元。`;
+    } else {
+      text += `，原告得請求 ${totalVal.toLocaleString()} 元。`;
+    }
+  } else if (valid) {
+    totalVal += residual;
+  }
+
+  return {
+    valid,
+    text: valid && c.p > 0 ? text + tableText : '',
+    total: totalVal,
+    preTotal,
+    usageText,
+    rate,
+    limitY
+  };
+}
+
+class DepreciationCalculatorManager {
+  constructor() {
+    this.type = 'non-transport';
+    this.customYrs = '';
+    this.el = {};
+    this.bound = false;
+    this.bind();
+  }
+
+  /** 於 #tabDepreciation 內查詢，避免與其他分頁衝突或 DOM 未就緒 */
+  bind() {
+    if (this.bound) return true;
+    const root = document.getElementById('tabDepreciation');
+    if (!root) return false;
+
+    const q = id => root.querySelector('#' + id);
+    const map = {
+      acc: q('depAcc'),
+      mfg: q('depMfg'),
+      parts: q('depParts'),
+      labor: q('depLabor'),
+      paint: q('depPaint'),
+      metal: q('depMetal'),
+      other: q('depOther'),
+      preTotal: q('depPreTotal'),
+      total: q('depTotal'),
+      usage: q('depUsage'),
+      draft: q('depDraft'),
+      typeSwitch: q('depTypeSwitch'),
+      customWrap: q('depCustomWrap'),
+      customYrs: q('depCustomYrs'),
+      rate: q('depRate'),
+      copyBtn: q('depCopyBtn'),
+      resetBtn: q('depResetBtn')
+    };
+
+    for (const el of Object.values(map)) {
+      if (!el) return false;
+    }
+    this.el = map;
+
+    ['acc', 'mfg'].forEach(key => {
+      this.filterDigits(this.el[key]);
+      const cal = this.el[key].closest('.d-input')?.querySelector('.d-cal');
+      if (cal) this.setupCalendar(cal, this.el[key]);
+    });
+
+    ['parts', 'labor', 'paint', 'metal', 'other'].forEach(key => {
+      this.el[key].addEventListener('input', () => {
+        this.el[key].value = IU.formatMoney(this.el[key].value);
+        this.recalc();
+      });
+    });
+
+    this.el.acc.addEventListener('input', () => this.recalc());
+    this.el.mfg.addEventListener('input', () => this.recalc());
+
+    this.el.customYrs.addEventListener('input', () => {
+      this.el.customYrs.value = this.el.customYrs.value.replace(/\D/g, '').slice(0, 2);
+      this.customYrs = this.el.customYrs.value;
+      if (this.el.customYrs.value && this.type !== 'custom') {
+        this.setType('custom', { focus: false });
+      } else {
+        this.recalc();
+      }
+    });
+
+    this.setupTypeSwitch();
+
+    this.el.copyBtn.addEventListener('click', e => {
+      const t = this.el.draft.value.trim();
+      if (!t) return;
+      copyText(t);
+      flashBtn(e.target, '已複製✓', '#16a34a');
+    });
+
+    this.el.resetBtn.addEventListener('click', e => this.reset(e.target));
+
+    this.bound = true;
+    this.recalc();
+    return true;
+  }
+
+  setupTypeSwitch() {
+    const container = this.el.typeSwitch;
+    if (!container) return;
+    container.querySelectorAll('.dl-switch-item').forEach(btn => {
+      btn.addEventListener('click', () => this.setType(btn.dataset.val));
+    });
+  }
+
+  syncTypeSwitchUI(type) {
+    const container = this.el.typeSwitch;
+    if (!container) return;
+    const items = container.querySelectorAll('.dl-switch-item');
+    const thumb = container.querySelector('.dl-switch-thumb');
+    items.forEach((btn, idx) => {
+      const on = btn.dataset.val === type;
+      btn.classList.toggle('active', on);
+      if (on) thumb.className = 'dl-switch-thumb' + (idx > 0 ? ` pos${idx}` : '');
+    });
+  }
+
+  filterDigits(input) {
+    if (!input) return;
+    input.addEventListener('input', () => {
+      const raw = input.value.replace(/\D/g, '').slice(0, 8);
+      if (input.value !== raw) input.value = raw;
+    });
+  }
+
+  setupCalendar(container, textInput) {
+    const native = container.querySelector('input[type="date"]');
+    if (!native) return;
+    native.addEventListener('change', () => {
+      if (!native.value) return;
+      textInput.value = DC.nativeDateToTW(native.value);
+      native.value = '';
+      this.recalc();
+    });
+  }
+
+  setType(type, opts = {}) {
+    this.type = type;
+    this.syncTypeSwitchUI(type);
+    if (type === 'custom' && opts.focus !== false) this.el.customYrs.focus();
+    this.recalc();
+  }
+
+  getState() {
+    return {
+      type: this.type,
+      yrs: this.el.customYrs.value,
+      acc: this.el.acc.value,
+      mfg: this.el.mfg.value,
+      parts: this.el.parts.value,
+      labor: this.el.labor.value,
+      paint: this.el.paint.value,
+      metal: this.el.metal.value,
+      other: this.el.other.value
+    };
+  }
+
+  recalc() {
+    if (!this.bound && !this.bind()) return;
+    const state = this.getState();
+    const cfg = getDepConfig(state);
+    const res = computeDepreciation(state);
+    this.el.preTotal.textContent = `$${res.preTotal.toLocaleString()}`;
+    this.el.total.textContent = `$${res.total.toLocaleString()}`;
+
+    if (res.usageText) {
+      this.el.usage.textContent = res.usageText;
+      this.el.usage.classList.remove('placeholder');
+    } else {
+      this.el.usage.textContent = '—';
+      this.el.usage.classList.add('placeholder');
+    }
+
+    if (this.el.rate) {
+      if (cfg.limitY > 0 && cfg.rate > 0) {
+        this.el.rate.textContent = `${cfg.limitY}年 · ${Math.round(cfg.rate * 1000)}‰`;
+        this.el.rate.classList.remove('placeholder');
+      } else {
+        this.el.rate.textContent = '—';
+        this.el.rate.classList.add('placeholder');
+      }
+    }
+
+    this.el.draft.value = res.text;
+
+    if (this.el.copyBtn) this.el.copyBtn.disabled = !this.el.draft.value.trim();
+  }
+
+  reset(btn) {
+    if (!this.bound) return;
+    ['acc', 'mfg', 'parts', 'labor', 'paint', 'metal', 'other'].forEach(key => {
+      this.el[key].value = '';
+    });
+    this.el.customYrs.value = '';
+    this.customYrs = '';
+    this.el.draft.value = '';
+    this.setType('non-transport', { focus: false });
+    if (btn) flashBtn(btn, '已清除✓');
+  }
+}
+
+/* ══════════════════════════════════════════
    Tab Management
    ══════════════════════════════════════════ */
 
 class TabManager {
   constructor() {
     this.panels = document.querySelectorAll('.tab-panel');
+    this.switchEl = $('tabSwitch');
     this.thumb = $('tabSwitchThumb');
-    this.texts = document.querySelectorAll('.tab-switch-text');
-    this.tabIds = ['tabCalc', 'tabDeadline', 'tabDate'];
+    this.primaryTexts = this.switchEl.querySelectorAll('.tab-switch-text');
+    this.secondaryTabs = [
+      { id: 'tabInterest', btn: $('tabInterestBtn') },
+      { id: 'tabDepreciation', btn: $('tabDepreciationBtn') }
+    ];
+    this.secondaryIds = this.secondaryTabs.map(t => t.id);
+    this.primaryIds = ['tabCalc', 'tabDeadline', 'tabDate'];
 
-    this.texts.forEach(t => {
+    this.primaryTexts.forEach(t => {
       t.addEventListener('click', (e) => {
         e.stopPropagation();
         this.activate(t.dataset.tab);
       });
+    });
+    this.secondaryTabs.forEach(({ id, btn }) => {
+      btn.addEventListener('click', () => this.activate(id));
     });
 
     const saved = localStorage.getItem('civilCalc_activeTab');
@@ -1124,13 +1792,27 @@ class TabManager {
 
   activate(tabId) {
     this.active = tabId;
-    const idx = this.tabIds.indexOf(tabId);
-    this.thumb.className = 'tab-switch-thumb' + (idx > 0 ? ` pos${idx}` : '');
-    this.texts.forEach(t => {
-      t.style.color = t.dataset.tab === tabId ? '#fff' : '';
+    const isSecondary = this.secondaryIds.includes(tabId);
+    this.secondaryTabs.forEach(({ id, btn }) => {
+      btn.classList.toggle('active', tabId === id);
     });
+    this.switchEl.classList.toggle('inactive', isSecondary);
+
+    const idx = this.primaryIds.indexOf(tabId);
+    if (idx >= 0) {
+      this.thumb.className = 'tab-switch-thumb' + (idx > 0 ? ` pos${idx}` : '');
+      this.primaryTexts.forEach(t => {
+        t.style.color = t.dataset.tab === tabId ? '#fff' : '';
+      });
+    } else {
+      this.primaryTexts.forEach(t => { t.style.color = ''; });
+    }
+
     this.panels.forEach(p => p.classList.toggle('active', p.id === tabId));
     localStorage.setItem('civilCalc_activeTab', tabId);
+    if (tabId === 'tabDepreciation' && typeof depreciationCalc !== 'undefined') {
+      depreciationCalc.bind();
+    }
   }
 }
 
@@ -1143,10 +1825,13 @@ const ui = new UIManager();
 const feeManager = new CourtFeeManager(ui);
 const holidayService = new HolidayService();
 const deadlineCalc = new DeadlineCalculatorManager(holidayService);
-const tabManager = new TabManager();
 const dateCalc = new DateCalculatorManager();
+const depreciationCalc = new DepreciationCalculatorManager();
+const tabManager = new TabManager();
+const interestCalc = new InterestCalculatorManager(feeManager, tabManager);
 
 if (IS_SIDEPANEL) {
+  document.documentElement.classList.add('sidepanel');
   document.body.classList.add('sidepanel');
   $('pinBtn').classList.add('active');
   $('pinBtn').title = '取消釘選';

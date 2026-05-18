@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>民事速算機</title>
+  <title>臺灣民事實務工具</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -20,11 +20,22 @@
 
     * { box-sizing: border-box; }
 
+    html {
+      overflow-x: hidden;
+    }
+
     body {
       font-family: 'Inter', 'Microsoft JhengHei', sans-serif;
-      width: 420px; height: 600px; margin: 0;
+      width: 420px; min-width: 420px; max-width: 420px;
+      height: 600px; margin: 0;
+      overflow: hidden; overflow-x: hidden;
       background: var(--bg); color: var(--text);
-      display: flex; flex-direction: column; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+
+    html.sidepanel,
+    body.sidepanel {
+      width: 100%; min-width: 0; max-width: none; height: 100vh;
     }
 
     .font-mono { font-family: 'JetBrains Mono', monospace; }
@@ -43,17 +54,32 @@
     .pin-btn.active svg rect { fill: currentColor; opacity: 0.15; }
     .pin-btn.active svg line { stroke-width: 2.5; }
 
-    body.sidepanel { width: 100%; height: 100vh; }
-
     /* ── Tab Bar ── */
     .tab-bar {
-      display: flex; padding: 10px 16px 8px; flex-shrink: 0;
-      align-items: center; gap: 8px;
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 8px 16px 6px; flex-shrink: 0;
+    }
+    .tab-bar-row1 {
+      display: flex; align-items: center; gap: 8px;
     }
     .tab-switch {
       position: relative; height: 32px;
       background: #e5e7eb; border-radius: 999px; padding: 4px;
       display: flex; flex: 1; min-width: 0; overflow: hidden;
+    }
+    .tab-switch.inactive .tab-switch-thumb { opacity: 0; }
+    .tab-row2-btn {
+      width: 100%; height: 28px; border: 0; border-radius: 999px;
+      background: #e5e7eb; color: var(--text-muted);
+      font-size: 11px; font-weight: 700; cursor: pointer;
+      transition: background 0.25s, color 0.25s;
+    }
+    .tab-bar-row2 {
+      display: flex; gap: 6px;
+    }
+    .tab-bar-row2 .tab-row2-btn { flex: 1; }
+    .tab-row2-btn.active {
+      background: var(--blue); color: #fff;
     }
     .tab-switch-thumb {
       position: absolute; left: 4px; top: 4px;
@@ -533,27 +559,301 @@
       line-height: 1.5;
     }
 
+    /* ── Tab 4: Interest Calculator (ic-) ── */
+    .ic-wrap {
+      flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+    }
+    .ic-list {
+      flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .ic-list::-webkit-scrollbar { width: 4px; }
+    .ic-list::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+
+    .ic-card {
+      border: 1px solid var(--border); border-radius: 8px; background: #fff;
+      overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    }
+    .ic-card__head {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
+      padding: 8px 12px; background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+    }
+    .ic-card__head .ic-lbl { margin-left: 2px; }
+    .ic-card__head .ic-tools { margin-left: auto; }
+    .ic-badge {
+      font-size: 11px; font-weight: 700; color: var(--blue);
+      font-family: 'JetBrains Mono', monospace; text-align: center;
+    }
+    .ic-lbl {
+      font-size: 11px; font-weight: 700; color: var(--text-muted); white-space: nowrap;
+    }
+    .ic-money {
+      display: inline-flex; height: 30px; flex: 0 0 auto;
+      border: 1px solid #d1d5db; border-radius: 4px; background: #fff; overflow: hidden;
+    }
+    .ic-money:focus-within { border-color: var(--blue); }
+    .ic-money--p input { color: var(--rose); }
+    .ic-money--w9 { width: 8.25rem; }
+    .ic-money__pre {
+      width: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      border-right: 1px solid var(--border); font-size: 12px; color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .ic-money input {
+      width: 6.25rem; flex: 0 0 6.25rem; border: 0; outline: 0; padding: 0 6px;
+      font-size: 12px; font-weight: 700; text-align: right;
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    .ic-date-7 {
+      display: inline-flex; flex: 0 0 auto;
+      width: calc(8.5ch + 30px); height: 30px; box-sizing: border-box;
+      border: 1px solid #d1d5db; border-radius: 4px; background: #fff; overflow: hidden;
+    }
+    .ic-date-7:focus-within { border-color: var(--blue); }
+    .ic-date-7 input[type="text"] {
+      width: 8.5ch; flex: 0 0 8.5ch; min-width: 8.5ch; max-width: 8.5ch;
+      border: 0; outline: 0; padding: 0 2px; font-size: 12px; text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+    }
+    .ic-date-7 .d-cal {
+      width: 30px; min-width: 30px; flex-shrink: 0; position: relative;
+      display: flex; align-items: center; justify-content: center;
+      border-left: 1px solid var(--border); color: var(--text-muted);
+    }
+    .ic-date-7 .d-cal input[type="date"] {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+    .ic-tools { display: flex; gap: 2px; justify-content: flex-end; }
+    .ic-btn {
+      width: 26px; height: 26px; border: 1px solid transparent; border-radius: 4px;
+      background: #fff; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ic-btn:hover { border-color: var(--border); color: var(--text); }
+    .ic-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .ic-btn--del:hover { color: var(--rose); border-color: #fecdd3; }
+
+    .ic-period { border-top: 1px solid var(--border); }
+    .ic-period__bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px 4px; gap: 8px;
+    }
+    .ic-period__title {
+      font-size: 11px; font-weight: 700; color: var(--text);
+    }
+    .ic-form {
+      display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+      padding: 0 12px 10px;
+    }
+    .ic-form__principal {
+      display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+      width: 100%; align-self: stretch; box-sizing: border-box;
+    }
+    .ic-form__dates {
+      display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+      width: 100%; align-self: stretch; box-sizing: border-box;
+    }
+    .ic-form__dates-row,
+    .ic-form__rate {
+      display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+    }
+    body.sidepanel .ic-form__dates {
+      flex-direction: column; align-items: flex-start;
+    }
+    .ic-form__principal .ic-years {
+      margin-left: auto; flex-shrink: 1; min-width: 0;
+      text-align: right;
+    }
+    .ic-date-sep {
+      flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--text-muted);
+      line-height: 30px;
+    }
+    .ic-form__dates .ic-rate {
+      width: 2.75rem; height: 30px; flex-shrink: 0;
+      border: 1px solid #d1d5db; border-radius: 4px;
+      text-align: center; font-size: 12px; padding: 0 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .ic-form__dates .ic-rate:focus { border-color: var(--blue); outline: 0; }
+    .ic-pct {
+      font-size: 12px; font-weight: 700; color: var(--text-muted);
+      flex-shrink: 0; line-height: 30px;
+    }
+    .ic-years {
+      font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap; line-height: 30px; max-width: 10rem;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .ic-years:empty { display: none; }
+
+    .ic-card__foot {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+      background: var(--border); border-top: 2px solid var(--blue);
+    }
+    .ic-stat {
+      background: #fff; padding: 8px 6px; text-align: center;
+      font-size: 10px; font-weight: 700; color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace; line-height: 1.4;
+    }
+    .ic-stat b { display: block; margin-top: 2px; font-size: 12px; color: var(--text); }
+    .ic-stat b.accent { color: var(--rose); }
+    .ic-stat b.grand { color: var(--blue-dark); font-size: 13px; }
+
+    .ic-foot {
+      flex-shrink: 0; padding: 10px 16px 12px;
+      background: var(--bg-panel); border-top: 1px solid var(--border);
+    }
+    .ic-total {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+      border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+      margin-bottom: 10px; background: var(--border);
+    }
+    .ic-total__cell {
+      background: #fff; padding: 10px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .ic-total__cell--grand { background: #eff6ff; }
+    .ic-total__lbl { font-size: 10px; font-weight: 700; color: var(--text-muted); }
+    .ic-total__val {
+      font-size: 16px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+    }
+    .ic-total__val--muted { color: var(--text-muted); font-size: 14px; }
+    .ic-total__val--rose { color: var(--rose); }
+    .ic-total__val--grand { color: var(--rose); font-size: 18px; }
+    .ic-foot__acts {
+      display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px;
+    }
+    .ic-foot__acts .btn-action { height: 36px; font-size: 11px; }
+    .ic-foot__acts .btn-action.primary {
+      background: var(--blue); color: #fff; border-color: var(--blue);
+    }
+    .ic-foot__acts .btn-action.primary:hover { background: var(--blue-dark); }
+    .ic-foot__acts .btn-action:disabled { opacity: 0.45; cursor: not-allowed; }
+    .ic-foot__acts .btn-action.btn-rose {
+      color: var(--rose); border-color: #fecdd3; background: #fff;
+    }
+    .ic-foot__acts .btn-action.btn-rose:hover {
+      color: var(--rose-dark); border-color: var(--rose); background: #fff1f2;
+    }
+
+    /* ── Tab 5: Depreciation (dep-) ── */
+    #tabDepreciation { overflow-x: hidden; }
+    .dep-wrap {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+      overflow: hidden; overflow-x: hidden;
+    }
+    .dep-form {
+      flex-shrink: 0; padding: 6px 16px 8px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .dep-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .dep-form .dl-field { gap: 3px; }
+    .dep-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; min-height: 20px;
+    }
+    .dep-meta .label-sm { margin: 0; flex-shrink: 0; }
+    .dep-meta-val {
+      font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+      color: var(--blue); text-align: right; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .dep-meta-val.placeholder { color: #d1d5db; font-weight: 600; }
+    .dep-type-row {
+      display: flex; align-items: center; gap: 6px; min-width: 0;
+    }
+    .dep-type-row .dl-switch { flex: 1; min-width: 0; }
+    #depTypeSwitch[data-count="4"] .dl-switch-item { font-size: 10.5px; padding: 0 4px; }
+    .dep-custom-inline {
+      display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+    }
+    .dep-custom-inline .d-input { width: 2.75rem; height: 32px; flex-shrink: 0; }
+    .dep-custom-inline .d-input input {
+      text-align: center; font-size: 13px; padding: 0 4px;
+    }
+    .dep-custom-inline .dep-yrs-suf {
+      font-size: 11px; font-weight: 700; color: var(--text-muted); white-space: nowrap;
+    }
+    .dep-cost-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px;
+    }
+    .dep-money.d-input .dep-money-pre {
+      width: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted);
+      border-right: 1px solid var(--border); background: #f9fafb;
+    }
+    .dep-money.d-input { display: flex; align-items: stretch; }
+    .dep-money.d-input input {
+      flex: 1; min-width: 0; border: 0; outline: 0; padding: 0 8px;
+      font-size: 13px; font-weight: 600; text-align: right;
+      font-family: 'JetBrains Mono', monospace; background: transparent;
+    }
+    .dep-money.d-input input.dep-parts { color: var(--rose); }
+    .dep-totals {
+      display: flex; gap: 8px; padding: 8px 0 6px;
+      border-top: 1px solid var(--border);
+    }
+    .dep-total-cell {
+      flex: 1; display: flex; align-items: center; justify-content: space-between;
+      gap: 6px; min-width: 0; min-height: 28px;
+    }
+    .dep-total-val {
+      font-size: 13px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .dep-total-val.muted { color: var(--text-muted); }
+    .dep-total-val.accent { color: var(--blue); }
+    .dep-foot {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+      border-top: 1px solid var(--border); background: var(--bg-panel);
+      padding: 6px 16px 10px; overflow: hidden;
+    }
+    .dep-foot-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 4px; flex-shrink: 0;
+    }
+    .dep-foot-head .label-sm { margin: 0; }
+    .dep-foot-actions { display: flex; gap: 10px; }
+    .dep-foot-actions .btn-text { font-size: 11px; }
+    #depDraft {
+      flex: 1; min-height: 48px; width: 100%;
+      padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;
+      background: #fff; font-size: 11px; line-height: 1.45; color: var(--text);
+      resize: none; outline: 0; font-family: inherit; box-sizing: border-box;
+      white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+      overflow-x: hidden; overflow-y: auto;
+    }
+    #depDraft:focus { border-color: var(--blue); }
+
   </style>
 </head>
 <body>
   <!-- Tab Bar -->
   <nav class="tab-bar">
-    <div class="tab-switch" id="tabSwitch">
-      <div class="tab-switch-thumb" id="tabSwitchThumb"></div>
-      <div class="tab-switch-text" data-tab="tabCalc">快速計算．裁判費</div>
-      <div class="tab-switch-text" data-tab="tabDeadline">救濟期間</div>
-      <div class="tab-switch-text" data-tab="tabDate">日期計算</div>
+    <div class="tab-bar-row1">
+      <div class="tab-switch" id="tabSwitch">
+        <div class="tab-switch-thumb" id="tabSwitchThumb"></div>
+        <div class="tab-switch-text" data-tab="tabCalc">速算．裁判費</div>
+        <div class="tab-switch-text" data-tab="tabDeadline">救濟期間</div>
+        <div class="tab-switch-text" data-tab="tabDate">日期計算</div>
+      </div>
+      <button id="pinBtn" class="pin-btn" title="釘選至側邊面板">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <line x1="15" y1="3" x2="15" y2="21"/>
+        </svg>
+      </button>
     </div>
-    <span class="spacer"></span>
-    <button id="pinBtn" class="pin-btn" title="釘選至側邊面板">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-        <line x1="15" y1="3" x2="15" y2="21"/>
-      </svg>
-    </button>
+    <div class="tab-bar-row2">
+      <button type="button" class="tab-row2-btn" id="tabInterestBtn" data-tab="tabInterest">利息計算</button>
+      <button type="button" class="tab-row2-btn" id="tabDepreciationBtn" data-tab="tabDepreciation">折舊計算</button>
+    </div>
   </nav>
 
-  <!-- ═══ Tab 1: 民事速算機 ═══ -->
+  <!-- ═══ Tab 1: 速算．裁判費 ═══ -->
   <div id="tabCalc" class="tab-panel active">
     <main>
       <textarea id="inputBox" placeholder="連續輸入數字或算式換行自動加總"></textarea>
@@ -687,13 +987,13 @@
       </div>
 
       <!-- 就審/抗告天數 (條件顯示) -->
-      <div class="dl-row" id="dlSubDaysRow" style="display:none">
+      <div class="dl-row" id="dlSubDaysRow">
         <div class="dl-field">
-          <label class="label-sm" id="dlSubDaysLabel">天數</label>
+          <label class="label-sm" id="dlSubDaysLabel">就審天數</label>
           <div class="dl-switch" id="dlSubDays" data-count="2">
             <div class="dl-switch-thumb"></div>
-            <button class="dl-switch-item active" data-val="first" type="button">—</button>
-            <button class="dl-switch-item" data-val="second" type="button">—</button>
+            <button class="dl-switch-item active" data-val="5" type="button">5日</button>
+            <button class="dl-switch-item" data-val="10" type="button">10日</button>
           </div>
         </div>
       </div>
@@ -804,7 +1104,7 @@
     </footer>
   </div>
 
-  <!-- ═══ Tab 3: 日期速算機 ═══ -->
+  <!-- ═══ Tab 3: 日期計算 ═══ -->
   <div id="tabDate" class="tab-panel">
     <div class="date-scroll">
 
@@ -928,6 +1228,149 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ═══ Tab 4: 利息計算 ═══ -->
+  <div id="tabInterest" class="tab-panel">
+    <div class="ic-wrap">
+      <div class="ic-list" id="intGroups"></div>
+      <footer class="ic-foot">
+        <div class="ic-total">
+          <div class="ic-total__cell">
+            <span class="ic-total__lbl">總本金</span>
+            <span id="intTotalA" class="ic-total__val ic-total__val--muted font-mono">$0</span>
+          </div>
+          <div class="ic-total__cell">
+            <span class="ic-total__lbl">總利息</span>
+            <span id="intTotalInt" class="ic-total__val ic-total__val--rose font-mono">$0</span>
+          </div>
+          <div class="ic-total__cell ic-total__cell--grand">
+            <span class="ic-total__lbl">請求總額</span>
+            <span id="intGrandTotal" class="ic-total__val ic-total__val--grand font-mono">$0</span>
+          </div>
+        </div>
+        <div class="ic-foot__acts">
+          <button type="button" id="intPrintBtn" class="btn-action" disabled>列印明細</button>
+          <button type="button" id="intResetBtn" class="btn-action btn-rose">清除</button>
+          <button type="button" id="intImportFeeBtn" class="btn-action primary" disabled>帶入裁判費</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 5: 折舊計算 ═══ -->
+  <div id="tabDepreciation" class="tab-panel">
+    <div class="dep-wrap">
+      <div class="dep-form">
+        <div class="dep-row-2">
+          <div class="dl-field">
+            <label class="label-sm" for="depAcc">折舊基準日</label>
+            <div class="d-input">
+              <input id="depAcc" type="text" class="font-mono" maxlength="8">
+              <div class="d-cal" title="選擇日期">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <input type="date" tabindex="-1">
+              </div>
+            </div>
+          </div>
+          <div class="dl-field">
+            <label class="label-sm" for="depMfg">出廠年月</label>
+            <div class="d-input">
+              <input id="depMfg" type="text" class="font-mono" maxlength="8" placeholder="可輸入YYYYMM">
+              <div class="d-cal" title="選擇日期">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <input type="date" tabindex="-1">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dep-meta">
+          <span class="label-sm">使用期間</span>
+          <span id="depUsage" class="dep-meta-val placeholder font-mono">—</span>
+        </div>
+
+        <div class="dep-meta">
+          <span class="label-sm">耐用年數/折舊率</span>
+          <span id="depRate" class="dep-meta-val font-mono">5年 · 369‰</span>
+        </div>
+
+        <div class="dep-type-row">
+          <div class="dl-switch" id="depTypeSwitch" data-count="4">
+            <div class="dl-switch-thumb pos2"></div>
+            <button type="button" class="dl-switch-item" data-val="motorcycle">機車</button>
+            <button type="button" class="dl-switch-item" data-val="transport">運輸業車</button>
+            <button type="button" class="dl-switch-item active" data-val="non-transport">非運輸業車</button>
+            <button type="button" class="dl-switch-item" data-val="custom">自訂</button>
+          </div>
+          <div id="depCustomWrap" class="dep-custom-inline">
+            <div class="d-input">
+              <input id="depCustomYrs" type="text" class="font-mono" maxlength="2" inputmode="numeric">
+            </div>
+            <span class="dep-yrs-suf">年</span>
+          </div>
+        </div>
+
+        <div class="dep-cost-grid">
+          <div class="dl-field">
+            <label class="label-sm" for="depParts" style="color:var(--rose)">零件（折舊）</label>
+            <div class="d-input dep-money">
+              <span class="dep-money-pre">$</span>
+              <input id="depParts" type="text" class="font-mono dep-parts" inputmode="numeric">
+            </div>
+          </div>
+          <div class="dl-field">
+            <label class="label-sm" for="depLabor">工資</label>
+            <div class="d-input dep-money">
+              <span class="dep-money-pre">$</span>
+              <input id="depLabor" type="text" class="font-mono" inputmode="numeric">
+            </div>
+          </div>
+          <div class="dl-field">
+            <label class="label-sm" for="depPaint">烤漆</label>
+            <div class="d-input dep-money">
+              <span class="dep-money-pre">$</span>
+              <input id="depPaint" type="text" class="font-mono" inputmode="numeric">
+            </div>
+          </div>
+          <div class="dl-field">
+            <label class="label-sm" for="depMetal">鈑金</label>
+            <div class="d-input dep-money">
+              <span class="dep-money-pre">$</span>
+              <input id="depMetal" type="text" class="font-mono" inputmode="numeric">
+            </div>
+          </div>
+          <div class="dl-field" style="grid-column:1/-1">
+            <label class="label-sm" for="depOther">其他</label>
+            <div class="d-input dep-money">
+              <span class="dep-money-pre">$</span>
+              <input id="depOther" type="text" class="font-mono" inputmode="numeric">
+            </div>
+          </div>
+        </div>
+
+        <div class="dep-totals">
+          <div class="dep-total-cell">
+            <span class="label-sm">折舊前</span>
+            <span id="depPreTotal" class="dep-total-val muted font-mono">$0</span>
+          </div>
+          <div class="dep-total-cell">
+            <span class="label-sm">折舊後</span>
+            <span id="depTotal" class="dep-total-val accent font-mono">$0</span>
+          </div>
+        </div>
+      </div>
+      <footer class="dep-foot">
+        <div class="dep-foot-head">
+          <span class="label-sm">書狀草稿（定率遞減法）</span>
+          <div class="dep-foot-actions">
+            <button type="button" id="depCopyBtn" class="btn-text btn-blue">複製</button>
+            <button type="button" id="depResetBtn" class="btn-text btn-rose">清除</button>
+          </div>
+        </div>
+        <textarea id="depDraft" spellcheck="false" ></textarea>
+      </footer>
     </div>
   </div>
 

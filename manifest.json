@@ -1,17 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "民事速算機",
-  "version": "2.0",
-  "description": "民事速算工具：金額計算、裁判費試算、期間試算、日期速算。",
+  "name": "臺灣民事實務工具",
+  "version": "2.1",
+  "description": "臺灣民事實務輔助：金額速算、裁判費試算、救濟期間、日期計算、利息與折舊試算。",
   "permissions": ["storage", "sidePanel"],
   "host_permissions": [
     "https://cdn.jsdelivr.net/*"
   ],
   "side_panel": {
-    "default_path": "popup.html"
+    "default_path": "popup.html?sidepanel=1"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "開啟民事計算機"
+    "default_title": "開啟臺灣民事實務工具"
   }
 }
