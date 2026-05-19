@@ -19,6 +19,31 @@ function flashBtn(btn, text, color) {
   setTimeout(() => { btn.textContent = orig; btn.style.color = origColor; }, 1000);
 }
 
+/** 僅允許數字輸入，並截斷至 maxLen 位（共用工具） */
+function digitFilter(input, maxLen = 8) {
+  if (!input) return;
+  input.addEventListener('input', () => {
+    const raw = input.value.replace(/\D/g, '').slice(0, maxLen);
+    if (input.value !== raw) input.value = raw;
+  });
+}
+
+/** 將 .d-cal 容器內的 native date input 綁定到對應的文字輸入框。
+ *  若 onChange 提供，則於日期變更後直接呼叫；否則於 textInput 觸發 'input' 事件，
+ *  讓既有的 input 事件監聽器自動更新。 */
+function attachCalendar(textInput, calContainer, onChange) {
+  if (!textInput || !calContainer) return;
+  const native = calContainer.querySelector('input[type="date"]');
+  if (!native) return;
+  native.addEventListener('change', () => {
+    if (!native.value) return;
+    textInput.value = DC.nativeDateToTW(native.value);
+    native.value = '';
+    if (onChange) onChange();
+    else textInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 function toFraction(value) {
   if (Number.isInteger(value)) return FMT.format(value);
   const sign = Math.sign(value), abs = Math.abs(value);
@@ -106,7 +131,7 @@ class CourtFeeManager {
     };
     this.el.input.addEventListener('input', () => this.onInput());
     $('feeToggleContainer').addEventListener('click', () => this.setType(this.type === 'new' ? 'old' : 'new'));
-    $('useTotalBtn').addEventListener('click', e => this.useTotal(e.target));
+    $('useTotalBtn').addEventListener('click', e => this.importAmount(this.ui.currentSum, e.target));
     $('clearFeeBtn').addEventListener('click', e => this.clear(e.target));
     $('copyFirstBtn').addEventListener('click', e => this.copy('first', e.target));
     $('copyAppealBtn').addEventListener('click', e => this.copy('appeal', e.target));
@@ -128,12 +153,6 @@ class CourtFeeManager {
     this.calc();
   }
 
-  useTotal(btn) {
-    const sum = Math.floor(this.ui.currentSum);
-    if (sum <= 0) return;
-    this.importAmount(sum, btn);
-  }
-
   importAmount(sum, btn) {
     const val = Math.floor(Number(sum) || 0);
     if (val <= 0) return false;
@@ -152,8 +171,8 @@ class CourtFeeManager {
   calc() {
     const val = parseInt(this.el.input.value.replace(/,/g, ''), 10) || 0;
     const { first, appeal } = calcCourtFee(val, this.type);
-    this.el.first.textContent = first ? FMT.format(first) : '0';
-    this.el.appeal.textContent = appeal ? FMT.format(appeal) : '0';
+    this.el.first.textContent = FMT.format(first);
+    this.el.appeal.textContent = FMT.format(appeal);
     this.el.first.classList.toggle('active', first > 0);
     this.el.appeal.classList.toggle('active', appeal > 0);
   }
@@ -365,22 +384,8 @@ class DateCalculatorManager {
   /* ── Helpers ── */
 
   setupCalendarInput(container) {
-    const native = container.querySelector('input[type="date"]');
     const text = container.closest('.d-input, .exc-input').querySelector('input[type="text"]');
-    if (!native || !text) return;
-    native.addEventListener('change', () => {
-      if (!native.value) return;
-      text.value = DC.nativeDateToTW(native.value);
-      native.value = '';
-      text.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-  }
-
-  filterDigits(input) {
-    input.addEventListener('input', () => {
-      const raw = input.value.replace(/\D/g, '').slice(0, 8);
-      if (input.value !== raw) input.value = raw;
-    });
+    attachCalendar(text, container);
   }
 
   setVal(el, text, isPlaceholder = false) {
@@ -392,8 +397,8 @@ class DateCalculatorManager {
 
   bindDateRange() {
     const elS = $('dateStart'), elE = $('dateEnd');
-    this.filterDigits(elS);
-    this.filterDigits(elE);
+    digitFilter(elS);
+    digitFilter(elE);
 
     document.querySelectorAll('#tabDate .d-section:first-child .d-section-body .d-cal').forEach(cal => {
       this.setupCalendarInput(cal);
@@ -471,8 +476,8 @@ class DateCalculatorManager {
     const daysEl = row.querySelector('.exc-days');
     const delBtn = row.querySelector('.exc-del');
 
-    this.filterDigits(excS);
-    this.filterDigits(excE);
+    digitFilter(excS);
+    digitFilter(excE);
 
     row.querySelectorAll('.d-cal').forEach(cal => this.setupCalendarInput(cal));
 
@@ -542,23 +547,15 @@ class DateCalculatorManager {
   /* ── Section 2: Date Offset ── */
 
   bindOffset() {
-    const elBase = $('offBase');
-    const elYY = $('offYY');
-    const elMM = $('offMM');
-    const elDD = $('offDD');
+    const fields = [$('offBase'), $('offYY'), $('offMM'), $('offDD')];
+    fields.forEach(el => {
+      digitFilter(el);
+      el.addEventListener('input', () => this.calcOffset());
+    });
 
-    this.filterDigits(elBase);
-    this.filterDigits(elYY);
-    this.filterDigits(elMM);
-    this.filterDigits(elDD);
-
+    const [elBase] = fields;
     const calContainer = elBase.closest('.d-input').querySelector('.d-cal');
     if (calContainer) this.setupCalendarInput(calContainer);
-
-    elBase.addEventListener('input', () => this.calcOffset());
-    elYY.addEventListener('input', () => this.calcOffset());
-    elMM.addEventListener('input', () => this.calcOffset());
-    elDD.addEventListener('input', () => this.calcOffset());
 
     $('offTodayBtn').addEventListener('click', () => {
       elBase.value = DC.todayTW();
@@ -575,10 +572,7 @@ class DateCalculatorManager {
     });
 
     $('dateOffsetClear').addEventListener('click', () => {
-      elBase.value = '';
-      elYY.value = '';
-      elMM.value = '';
-      elDD.value = '';
+      fields.forEach(el => { el.value = ''; });
       this.calcOffset();
     });
 
@@ -615,7 +609,7 @@ class DateCalculatorManager {
 
   bindAge() {
     const elBirth = $('ageBirth');
-    this.filterDigits(elBirth);
+    digitFilter(elBirth);
 
     const calContainer = elBirth.closest('.d-input').querySelector('.d-cal');
     if (calContainer) this.setupCalendarInput(calContainer);
@@ -878,20 +872,12 @@ class DeadlineCalculatorManager {
 
   updateSubDays() {
     const row = $('dlSubDaysRow');
-    const label = $('dlSubDaysLabel');
     const container = $('dlSubDays');
     if (!row || !container) return;
     const items = container.querySelectorAll('.dl-switch-item');
     const thumb = container.querySelector('.dl-switch-thumb');
 
-    if (this.appealType === 'hearing') {
-      row.style.display = '';
-      if (label) label.textContent = '就審天數';
-      items[0].textContent = '5日'; items[0].dataset.val = '5';
-      items[1].textContent = '10日'; items[1].dataset.val = '10';
-    } else {
-      row.style.display = 'none';
-    }
+    row.style.display = this.appealType === 'hearing' ? '' : 'none';
     items[0].classList.add('active');
     items[1].classList.remove('active');
     thumb.className = 'dl-switch-thumb';
@@ -958,22 +944,11 @@ class DeadlineCalculatorManager {
       this.calc();
     });
     location.addEventListener('change', () => this.calc());
-    dateInput.addEventListener('input', () => {
-      const raw = dateInput.value.replace(/\D/g, '').slice(0, 8);
-      if (dateInput.value !== raw) dateInput.value = raw;
-      this.calc();
-    });
+    digitFilter(dateInput);
+    dateInput.addEventListener('input', () => this.calc());
 
     const calContainer = dateInput.closest('.d-input').querySelector('.d-cal');
-    if (calContainer) {
-      const native = calContainer.querySelector('input[type="date"]');
-      native.addEventListener('change', () => {
-        if (!native.value) return;
-        dateInput.value = DC.nativeDateToTW(native.value);
-        native.value = '';
-        this.calc();
-      });
-    }
+    attachCalendar(dateInput, calContainer, () => this.calc());
 
     const clearBtn = $('dlClearBtn');
     if (clearBtn) clearBtn.addEventListener('click', () => this.resetAll());
@@ -1014,14 +989,9 @@ class DeadlineCalculatorManager {
     }
   }
 
-  clear(clearInput = false) {
-    if (clearInput) $('dlDate').value = '';
-    this.setResult('dlResA', '—', true);
-    this.setResult('dlResB', '—', true);
-    this.setResult('dlResC', '—', true);
-    this.setResult('dlResTotal', '—', true);
-    this.setResult('dlResRaw', '—', true);
-    this.setResult('dlResFinal', '—', true);
+  clear() {
+    ['dlResA', 'dlResB', 'dlResC', 'dlResTotal', 'dlResRaw', 'dlResFinal']
+      .forEach(id => this.setResult(id, '—', true));
   }
 
   setResult(id, text, isPlaceholder = false, cls = '') {
@@ -1116,12 +1086,12 @@ const IU = {
     return remY ? `${y ? `${y}年 ` : ''}${remY}/${daysInY}年` : `${y}年`;
   },
 
-  calcDelayInterestRaw(p, rAnnual, dateDiffRes) {
-    if (!dateDiffRes || p <= 0 || rAnnual <= 0) return { raw: 0, display: '' };
-    const { y, remY, daysInY } = dateDiffRes;
-    let raw = p * rAnnual * y;
-    if (remY > 0 && daysInY > 0) raw += p * rAnnual * (remY / daysInY);
-    return { raw, display: IU.formatYears(dateDiffRes) };
+  /** 本金 × 年利率 × (整年 + 不足一年按日比例)。 */
+  delayInterest(p, rAnnual, dateDiff) {
+    if (!dateDiff || p <= 0 || rAnnual <= 0) return 0;
+    const { y, remY, daysInY } = dateDiff;
+    const fractional = remY > 0 && daysInY > 0 ? remY / daysInY : 0;
+    return p * rAnnual * (y + fractional);
   },
 
   formatInterest(raw) {
@@ -1175,7 +1145,7 @@ class InterestCalculatorManager {
     let totalA = 0;
     let sumIntRaw = 0;
     let htmlRows = '';
-    const rows = [];
+    let rowCount = 0;
 
     const computedGroups = this.groups.map((g, gIdx) => {
       const aNum = IU.num(g.a);
@@ -1186,17 +1156,15 @@ class InterestCalculatorManager {
         const rDec = IU.num(seg.r) / 100;
         const ds = DC.parseDate(seg.s);
         const de = DC.parseDate(seg.e);
-        let interestRaw = 0;
-        let hasCalc = false;
         const dateDiffRes = ds && de && ds <= de ? DC.calcDateDiff(ds, de) : null;
         const yearDisplay = IU.formatYears(dateDiffRes);
-        if (dateDiffRes && bNum > 0 && IU.num(seg.r) > 0) {
-          interestRaw = IU.calcDelayInterestRaw(bNum, rDec, dateDiffRes).raw;
-          hasCalc = true;
+        const interestRaw = IU.delayInterest(bNum, rDec, dateDiffRes);
+        const hasCalc = interestRaw > 0;
+        if (hasCalc) {
           sumIntRaw += interestRaw;
           const cell = IU.formatInterest(interestRaw);
           htmlRows += `<tr><td>本金群組 ${gIdx + 1} 期間${sIdx + 1}</td><td class="text-right">${bNum.toLocaleString()}</td><td>${DC.formatTW(ds)}</td><td>${DC.formatTW(de)}</td><td>${seg.r}%</td><td>${yearDisplay}</td><td class="text-right">${cell}</td></tr>`;
-          rows.push({ gIdx: gIdx + 1, sIdx: sIdx + 1, bNum, ds, de, rate: seg.r, yearDisplay, cell });
+          rowCount++;
         }
         groupIntRaw += interestRaw;
         return { ...seg, interestRaw, yearDisplay, hasCalc, interestDisplay: hasCalc ? IU.formatInterest(interestRaw) : '' };
@@ -1208,7 +1176,7 @@ class InterestCalculatorManager {
     const grandTotal = totalA + totalInt;
     return {
       valid: grandTotal > 0,
-      hasPrintRows: rows.length > 0,
+      hasPrintRows: rowCount > 0,
       totalA,
       totalInt,
       grandTotal,
@@ -1229,6 +1197,8 @@ class InterestCalculatorManager {
     res.computedGroups.forEach(g => {
       const el = this.container.querySelector(`[data-gid="${g.id}"]`);
       if (!el) return;
+      const aHasValue = IU.num(g.a) > 0;
+      el.querySelectorAll('.ic-import').forEach(btn => { btn.disabled = !aHasValue; });
       g.computedSegments.forEach(seg => {
         const row = el.querySelector(`[data-sid="${seg.id}"]`);
         if (!row) return;
@@ -1274,7 +1244,7 @@ class InterestCalculatorManager {
   }
 
   groupHtml(g, index, groupCount) {
-    const segs = g.computedSegments.map((seg, sIdx) => this.segHtml(g.id, seg, sIdx)).join('');
+    const segs = g.computedSegments.map((seg, sIdx) => this.segHtml(g.id, seg, sIdx, g.a)).join('');
     const n = String(index + 1).padStart(2, '0');
     return `
       <article class="ic-card" data-gid="${g.id}">
@@ -1297,8 +1267,10 @@ class InterestCalculatorManager {
     return `${seg.yearDisplay}${seg.interestDisplay ? ` · $${seg.interestDisplay}` : ''}`;
   }
 
-  segHtml(gid, seg, sIdx) {
+  segHtml(gid, seg, sIdx, parentA) {
     const years = this.periodYearsLabel(seg);
+    const aHasValue = IU.num(parentA) > 0;
+    const importDisabled = aHasValue ? '' : 'disabled';
     return `
       <section class="ic-period" data-gid="${gid}" data-sid="${seg.id}">
         <div class="ic-period__bar">
@@ -1312,6 +1284,7 @@ class InterestCalculatorManager {
           <div class="ic-form__principal">
             <span class="ic-lbl">計息本金</span>
             ${this.moneyInput('p', seg.p, true)}
+            <button type="button" class="ic-import" data-action="import-a" title="帶入上方本金金額" ${importDisabled}>帶入本金</button>
             <span class="ic-years">${years}</span>
           </div>
           <div class="ic-form__dates">
@@ -1333,15 +1306,8 @@ class InterestCalculatorManager {
   }
 
   setupCalendar(calEl) {
-    const native = calEl.querySelector('input[type="date"]');
     const text = calEl.closest('.d-input, .ic-date-7').querySelector('input[type="text"]');
-    if (!native || !text) return;
-    native.addEventListener('change', () => {
-      if (!native.value) return;
-      text.value = DC.nativeDateToTW(native.value);
-      native.value = '';
-      text.dispatchEvent(new Event('input', { bubbles: true }));
-    });
+    attachCalendar(text, calEl);
   }
 
   onInput(e) {
@@ -1409,6 +1375,13 @@ class InterestCalculatorManager {
       } else {
         g.segments = g.segments.filter(s => s.id !== sid);
       }
+      this.render();
+    } else if (action === 'import-a') {
+      const seg = this.findSegment(g, sid);
+      if (!seg) return;
+      const aDigits = String(g.a || '').replace(/[^\d]/g, '');
+      if (!aDigits) return;
+      seg.p = aDigits;
       this.render();
     }
   }
@@ -1493,89 +1466,72 @@ function computeDepreciation(state) {
     o: IU.num(state.other)
   };
 
-  let text = '';
-  let tableText = '';
-  const preTotal = c.p + c.l + c.pt + c.m + c.o;
-  let totalVal = c.l + c.pt + c.m + c.o;
-  let residual = c.p;
+  const nonDepTotal = c.l + c.pt + c.m + c.o;
+  const preTotal = c.p + nonDepTotal;
   let usageText = '';
-
   if (valid) {
     const y = Math.floor(usageM / 12);
     const m = usageM % 12;
     usageText = `${y > 0 ? `${y}年` : ''}${m > 0 || y === 0 ? `${m}月` : ''}`;
   }
 
-  if (valid && c.p > 0) {
-    const typeLabel = cfg.label;
-    const mfgStr = `${dMfg.getFullYear() - 1911}年${dMfg.getMonth() + 1}月`;
-
-    tableText = '\n\n附表：\n折舊時間\t\t金額\n';
-    let currentVal = c.p;
-    let totalDep = 0;
-    const limit = Math.round(c.p * 0.9);
-    const fullYears = Math.floor(usageM / 12);
-    const remMonths = usageM % 12;
-    const totalSteps = remMonths > 0 ? fullYears + 1 : fullYears;
-
-    for (let i = 1; i <= Math.max(totalSteps, 1); i++) {
-      if (limitY > 0 && i > limitY) {
-        tableText += `第${i}年折舊值\t\t0\n第${i}年折舊後價值\t${currentVal.toLocaleString()}-0=${currentVal.toLocaleString()}\n`;
-        continue;
-      }
-      let depVal = 0;
-      let calcStr = '';
-      const originalCalc = Math.round(currentVal * rate * (i <= fullYears ? 1 : (remMonths / 12)));
-      if (totalDep + originalCalc > limit) {
-        depVal = Math.max(limit - totalDep, 0);
-        calcStr = `${currentVal.toLocaleString()}×${rate}${i <= fullYears ? '' : `×(${remMonths}/12)`}=${originalCalc.toLocaleString()} (受殘值1/10限制，截為${depVal.toLocaleString()})`;
-      } else {
-        depVal = originalCalc;
-        calcStr = `${currentVal.toLocaleString()}×${rate}${i <= fullYears ? '' : `×(${remMonths}/12)`}=${depVal.toLocaleString()}`;
-      }
-      if (depVal === 0 && currentVal <= c.p - limit) calcStr = '0 (已達殘值下限)';
-
-      tableText += `第${i}年折舊值\t\t${calcStr}\n`;
-      const newVal = currentVal - depVal;
-      tableText += `第${i}年折舊後價值\t${currentVal.toLocaleString()}-${depVal.toLocaleString()}=${newVal.toLocaleString()}\n`;
-      currentVal = newVal;
-      totalDep += depVal;
-    }
-    residual = currentVal;
-    totalVal += residual;
-
-    const nonDepItems = [];
-    if (c.l > 0) nonDepItems.push(`工資 ${c.l.toLocaleString()} 元`);
-    if (c.pt > 0) nonDepItems.push(`烤漆 ${c.pt.toLocaleString()} 元`);
-    if (c.m > 0) nonDepItems.push(`鈑金 ${c.m.toLocaleString()} 元`);
-    if (c.o > 0) nonDepItems.push(`其他 ${c.o.toLocaleString()} 元`);
-
-    text = `依行政院「固定資產耐用年數表」及「折舊率表」規定，${typeLabel}耐用年數為 ${limitY} 年，依定率遞減法折舊千分之 ${Math.round(rate * 1000)}。查系爭車輛自${mfgStr}出廠，迄折舊基準日已使用${usageText}，零件扣除折舊後估定為 ${residual.toLocaleString()} 元`;
-
-    if (nonDepItems.length > 0) {
-      text += `，加計無庸扣除折舊之${nonDepItems.join('、')}後，原告得請求 ${totalVal.toLocaleString()} 元。`;
-    } else {
-      text += `，原告得請求 ${totalVal.toLocaleString()} 元。`;
-    }
-  } else if (valid) {
-    totalVal += residual;
+  /* 未填日期或零件成本為 0：折舊後 = 折舊前（無從套用折舊） */
+  if (!valid || c.p <= 0) {
+    return { valid, text: '', total: preTotal, preTotal, usageText, rate, limitY };
   }
 
-  return {
-    valid,
-    text: valid && c.p > 0 ? text + tableText : '',
-    total: totalVal,
-    preTotal,
-    usageText,
-    rate,
-    limitY
-  };
+  const mfgStr = `${dMfg.getFullYear() - 1911}年${dMfg.getMonth() + 1}月`;
+  const limit = Math.round(c.p * 0.9);
+  const fullYears = Math.floor(usageM / 12);
+  const remMonths = usageM % 12;
+  const totalSteps = Math.max(remMonths > 0 ? fullYears + 1 : fullYears, 1);
+
+  let tableText = '\n\n附表：\n折舊時間\t\t金額\n';
+  let currentVal = c.p;
+  let totalDep = 0;
+
+  for (let i = 1; i <= totalSteps; i++) {
+    if (limitY > 0 && i > limitY) {
+      tableText += `第${i}年折舊值\t\t0\n第${i}年折舊後價值\t${currentVal.toLocaleString()}-0=${currentVal.toLocaleString()}\n`;
+      continue;
+    }
+    const factor = i <= fullYears ? 1 : (remMonths / 12);
+    const factorStr = i <= fullYears ? '' : `×(${remMonths}/12)`;
+    const originalCalc = Math.round(currentVal * rate * factor);
+    const capped = totalDep + originalCalc > limit;
+    const depVal = capped ? Math.max(limit - totalDep, 0) : originalCalc;
+
+    let calcStr = capped
+      ? `${currentVal.toLocaleString()}×${rate}${factorStr}=${originalCalc.toLocaleString()} (受殘值1/10限制，截為${depVal.toLocaleString()})`
+      : `${currentVal.toLocaleString()}×${rate}${factorStr}=${depVal.toLocaleString()}`;
+    if (depVal === 0 && currentVal <= c.p - limit) calcStr = '0 (已達殘值下限)';
+
+    const newVal = currentVal - depVal;
+    tableText += `第${i}年折舊值\t\t${calcStr}\n第${i}年折舊後價值\t${currentVal.toLocaleString()}-${depVal.toLocaleString()}=${newVal.toLocaleString()}\n`;
+    currentVal = newVal;
+    totalDep += depVal;
+  }
+
+  const residual = currentVal;
+  const total = residual + nonDepTotal;
+
+  const nonDepItems = [];
+  if (c.l > 0) nonDepItems.push(`工資 ${c.l.toLocaleString()} 元`);
+  if (c.pt > 0) nonDepItems.push(`烤漆 ${c.pt.toLocaleString()} 元`);
+  if (c.m > 0) nonDepItems.push(`鈑金 ${c.m.toLocaleString()} 元`);
+  if (c.o > 0) nonDepItems.push(`其他 ${c.o.toLocaleString()} 元`);
+
+  const head = `依行政院「固定資產耐用年數表」及「折舊率表」規定，${cfg.label}耐用年數為 ${limitY} 年，依定率遞減法折舊千分之 ${Math.round(rate * 1000)}。查系爭車輛自${mfgStr}出廠，迄折舊基準日已使用${usageText}，零件扣除折舊後估定為 ${residual.toLocaleString()} 元`;
+  const tail = nonDepItems.length
+    ? `，加計無庸扣除折舊之${nonDepItems.join('、')}後，原告得請求 ${total.toLocaleString()} 元。`
+    : `，原告得請求 ${total.toLocaleString()} 元。`;
+
+  return { valid, text: head + tail + tableText, total, preTotal, usageText, rate, limitY };
 }
 
 class DepreciationCalculatorManager {
   constructor() {
     this.type = 'non-transport';
-    this.customYrs = '';
     this.el = {};
     this.bound = false;
     this.bind();
@@ -1614,9 +1570,10 @@ class DepreciationCalculatorManager {
     this.el = map;
 
     ['acc', 'mfg'].forEach(key => {
-      this.filterDigits(this.el[key]);
+      digitFilter(this.el[key]);
       const cal = this.el[key].closest('.d-input')?.querySelector('.d-cal');
-      if (cal) this.setupCalendar(cal, this.el[key]);
+      attachCalendar(this.el[key], cal, () => this.recalc());
+      this.el[key].addEventListener('input', () => this.recalc());
     });
 
     ['parts', 'labor', 'paint', 'metal', 'other'].forEach(key => {
@@ -1626,12 +1583,8 @@ class DepreciationCalculatorManager {
       });
     });
 
-    this.el.acc.addEventListener('input', () => this.recalc());
-    this.el.mfg.addEventListener('input', () => this.recalc());
-
     this.el.customYrs.addEventListener('input', () => {
       this.el.customYrs.value = this.el.customYrs.value.replace(/\D/g, '').slice(0, 2);
-      this.customYrs = this.el.customYrs.value;
       if (this.el.customYrs.value && this.type !== 'custom') {
         this.setType('custom', { focus: false });
       } else {
@@ -1672,25 +1625,6 @@ class DepreciationCalculatorManager {
       const on = btn.dataset.val === type;
       btn.classList.toggle('active', on);
       if (on) thumb.className = 'dl-switch-thumb' + (idx > 0 ? ` pos${idx}` : '');
-    });
-  }
-
-  filterDigits(input) {
-    if (!input) return;
-    input.addEventListener('input', () => {
-      const raw = input.value.replace(/\D/g, '').slice(0, 8);
-      if (input.value !== raw) input.value = raw;
-    });
-  }
-
-  setupCalendar(container, textInput) {
-    const native = container.querySelector('input[type="date"]');
-    if (!native) return;
-    native.addEventListener('change', () => {
-      if (!native.value) return;
-      textInput.value = DC.nativeDateToTW(native.value);
-      native.value = '';
-      this.recalc();
     });
   }
 
@@ -1752,9 +1686,347 @@ class DepreciationCalculatorManager {
       this.el[key].value = '';
     });
     this.el.customYrs.value = '';
-    this.customYrs = '';
     this.el.draft.value = '';
     this.setType('non-transport', { focus: false });
+    if (btn) flashBtn(btn, '已清除✓');
+  }
+}
+
+/* ══════════════════════════════════════════
+   Rent Unjust Enrichment (相當於租金之不當得利)
+   ══════════════════════════════════════════ */
+
+function formatAreaNum(val) {
+  if (!val && val !== 0) return '';
+  const parts = String(val).replace(/[^\d.-]/g, '').split('.');
+  parts[0] = parts[0] ? Number(parts[0]).toLocaleString('en-US') : '';
+  return parts.join('.');
+}
+
+function computeRentUnjust(form, lands) {
+  const dStart = DC.parseDate(form.sDate);
+  const dEnd = DC.parseDate(form.eDate);
+  if (!dStart || !dEnd || dStart > dEnd) {
+    return { valid: false, segments: [], totalDays: 0, totalAmount: 0, avgMonthly: 0, draft: '' };
+  }
+
+  let cur = new Date(dStart.getTime());
+  const segments = [];
+  while (cur <= dEnd) {
+    const y = cur.getFullYear();
+    const eoy = new Date(y, 11, 31);
+    const end = eoy < dEnd ? eoy : dEnd;
+    segments.push({
+      start: new Date(cur.getTime()),
+      end: new Date(end.getTime()),
+      days: Math.round((new Date(end.getTime() + MS_PER_DAY) - cur) / MS_PER_DAY),
+      year: y
+    });
+    cur = new Date(y + 1, 0, 1);
+  }
+
+  const buildVal = IU.num(form.buildVal);
+  const rate = IU.num(form.rate) / 100;
+  let totalDays = 0;
+  let totalAmount = 0;
+  const details = [];
+
+  segments.forEach(seg => {
+    let landBaseSum = 0;
+    const landDetails = lands.map((land, idx) => {
+      const area = IU.num(land.area);
+      const price = IU.num(land.prices[seg.year]);
+      landBaseSum += area * price;
+      const dispName = (land.name && land.name.trim()) || `土地${idx + 1}`;
+      return { name: dispName, area, price };
+    });
+    const baseValue = landBaseSum + buildVal;
+    const segmentAmount = Math.round(Math.round(baseValue * rate) * (seg.days / 365));
+    totalDays += seg.days;
+    totalAmount += segmentAmount;
+    details.push({ ...seg, landDetails, baseValue, segmentAmount });
+  });
+
+  const avgMonthly = totalDays > 0 ? Math.round(totalAmount / (totalDays / 365) / 12) : 0;
+  let draft = '';
+  if (totalDays > 0) {
+    const landsWithIdx = lands.map((l, i) => ({ ...l, dispName: (l.name && l.name.trim()) || `土地${i + 1}` }));
+    const validLands = landsWithIdx.filter(l => IU.num(l.area) > 0);
+    const landDesc = validLands.length > 0
+      ? validLands.map(l => `${l.dispName} ${formatAreaNum(l.area)} ㎡`).join('、')
+      : '未輸入土地';
+    draft = `按無法律上之原因而受利益，致他人受損害者，應返還其利益。又無權占有他人土地，可能獲得相當於租金之利益為社會通常之觀念。本院斟酌系爭土地坐落位置及利用情形，認相當於租金之不當得利以申報總價額年息 ${form.rate}% 計算為適當。查系爭土地占用面積分別為：${landDesc}${buildVal > 0 ? `，房屋現值為 ${buildVal.toLocaleString()} 元` : ''}。自 ${dStart.getFullYear() - 1911}年${dStart.getMonth() + 1}月${dStart.getDate()}日 起至 ${dEnd.getFullYear() - 1911}年${dEnd.getMonth() + 1}月${dEnd.getDate()}日 止，各期得請求金額分述如下：\n\n`;
+    details.forEach((d, i) => {
+      const s = `${d.start.getFullYear() - 1911}.${d.start.getMonth() + 1}.${d.start.getDate()}`;
+      const e = `${d.end.getFullYear() - 1911}.${d.end.getMonth() + 1}.${d.end.getDate()}`;
+      const priceDesc = validLands.length > 0
+        ? d.landDetails.filter(l => l.area > 0).map(l => `${l.name}申報地價 ${l.price.toLocaleString()} 元/㎡`).join('，')
+        : '未設定地價';
+      draft += `(${i + 1}) ${s} 至 ${e} (${d.days}日)：\n    ${priceDesc}。\n    申報總價額為 ${d.baseValue.toLocaleString()} 元。\n    得請求：${d.baseValue.toLocaleString()} × ${form.rate}% × (${d.days}/365) = ${d.segmentAmount.toLocaleString()} 元\n`;
+    });
+    draft += `\n綜上，原告得請求之不當得利總計為 ${totalAmount.toLocaleString()} 元。`;
+  }
+
+  return { valid: true, segments: details, totalDays, totalAmount, avgMonthly, draft };
+}
+
+class RentUnjustCalculatorManager {
+  constructor(feeManager, tabManager) {
+    this.feeManager = feeManager;
+    this.tabManager = tabManager;
+    this.nextLandId = 1;
+    this.lands = [{ id: this.nextLandId++, name: '', area: '', prices: {}, expanded: true }];
+    this.bound = false;
+    this.bind();
+  }
+
+  bind() {
+    if (this.bound) return true;
+    const root = document.getElementById('tabRentUnjust');
+    if (!root) return false;
+
+    const q = id => root.querySelector('#' + id);
+    const map = {
+      start: q('ueStart'),
+      end: q('ueEnd'),
+      rate: q('ueRate'),
+      buildVal: q('ueBuildVal'),
+      landList: q('ueLandList'),
+      totalAmt: q('ueTotalAmt'),
+      totalMonthly: q('ueTotalMonthly'),
+      rateVal: q('ueRateVal'),
+      draft: q('ueDraft'),
+      back5Btn: q('ueBack5Btn'),
+      copyBtn: q('ueCopyBtn'),
+      resetBtn: q('ueResetBtn'),
+      importFeeBtn: q('ueImportFeeBtn')
+    };
+    for (const el of Object.values(map)) {
+      if (!el) return false;
+    }
+    this.el = map;
+
+    [this.el.start, this.el.end].forEach(input => {
+      digitFilter(input);
+      const cal = input.closest('.d-input')?.querySelector('.d-cal');
+      attachCalendar(input, cal, () => this.recalc());
+      input.addEventListener('input', () => this.recalc());
+    });
+    this.el.rate.addEventListener('input', () => {
+      this.syncRateVal();
+      this.recalc(false);
+    });
+    this.syncRateVal();
+    this.el.buildVal.addEventListener('input', () => {
+      this.el.buildVal.value = IU.formatMoney(this.el.buildVal.value);
+      this.recalc(false);
+    });
+
+    this.el.back5Btn.addEventListener('click', () => this.backtrack5Years());
+    this.el.landList.addEventListener('input', e => this.onLandInput(e));
+    this.el.landList.addEventListener('click', e => this.onLandClick(e));
+
+    this.el.copyBtn.addEventListener('click', e => {
+      const t = this.el.draft.value.trim();
+      if (!t) return;
+      copyText(t);
+      flashBtn(e.target, '已複製✓', '#16a34a');
+    });
+    this.el.resetBtn.addEventListener('click', e => this.reset(e.target));
+    this.el.importFeeBtn.addEventListener('click', e => this.importToFee(e.target));
+
+    this.bound = true;
+    this.recalc();
+    return true;
+  }
+
+  syncRateVal() {
+    if (this.el.rateVal) {
+      this.el.rateVal.textContent = `${this.el.rate.value}%`;
+    }
+  }
+
+  getForm() {
+    return {
+      sDate: this.el.start.value,
+      eDate: this.el.end.value,
+      rate: this.el.rate.value,
+      buildVal: this.el.buildVal.value
+    };
+  }
+
+  findLand(id) {
+    return this.lands.find(l => l.id === id);
+  }
+
+  addLand() {
+    this.lands.push({ id: this.nextLandId++, name: '', area: '', prices: {}, expanded: true });
+    this.recalc();
+  }
+
+  insertLandAfter(idx) {
+    const n = [...this.lands];
+    n.splice(idx + 1, 0, { id: this.nextLandId++, name: '', area: '', prices: {}, expanded: true });
+    this.lands = n;
+    this.recalc();
+  }
+
+  deleteLand(id) {
+    if (this.lands.length <= 1) return;
+    this.lands = this.lands.filter(l => l.id !== id);
+    this.recalc();
+  }
+
+  onLandInput(e) {
+    const input = e.target;
+    if (input.dataset.lid && input.dataset.year) {
+      const land = this.findLand(Number(input.dataset.lid));
+      if (!land) return;
+      land.prices[input.dataset.year] = input.value.replace(/[^\d.-]/g, '');
+      input.value = IU.formatMoney(land.prices[input.dataset.year]);
+      this.recalc(false);
+      return;
+    }
+    const block = input.closest('[data-lid]');
+    if (!block) return;
+    const land = this.findLand(Number(block.dataset.lid));
+    if (!land) return;
+    if (input.dataset.field === 'name') {
+      land.name = input.value;
+    } else if (input.dataset.field === 'area') {
+      land.area = input.value.replace(/[^\d.-]/g, '');
+      input.value = formatAreaNum(land.area);
+    }
+    this.recalc(false);
+  }
+
+  onLandClick(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const block = btn.closest('[data-lid]');
+    if (!block) return;
+    const id = Number(block.dataset.lid);
+    const action = btn.dataset.action;
+    if (action === 'ins-land') {
+      const idx = this.lands.findIndex(l => l.id === id);
+      this.insertLandAfter(idx);
+    } else if (action === 'del-land') {
+      this.deleteLand(id);
+    } else if (action === 'toggle-prices') {
+      const land = this.findLand(id);
+      if (!land) return;
+      land.expanded = !(land.expanded !== false);
+      block.querySelector('.ue-land-prices')?.classList.toggle('collapsed', !land.expanded);
+    } else if (action === 'copy-prev') {
+      const land = this.findLand(id);
+      const year = btn.dataset.year;
+      const prevYear = btn.dataset.prevYear;
+      if (!land || !prevYear) return;
+      land.prices[year] = land.prices[prevYear] || '';
+      const input = block.querySelector(`input[data-lid="${id}"][data-year="${year}"]`);
+      if (input) input.value = IU.formatMoney(land.prices[year]);
+      this.recalc(false);
+    }
+  }
+
+  backtrack5Years() {
+    const dEnd = DC.parseDate(this.el.end.value);
+    if (!dEnd) return;
+    const t = new Date(dEnd.getFullYear() - 5, dEnd.getMonth(), dEnd.getDate() + 1);
+    const pad = n => String(n).padStart(2, '0');
+    this.el.start.value = `${t.getFullYear() - 1911}${pad(t.getMonth() + 1)}${pad(t.getDate())}`;
+    this.recalc();
+  }
+
+  segmentLabel(seg) {
+    const pad = n => String(n).padStart(2, '0');
+    const y = seg.start.getFullYear() - 1911;
+    return `${y}.${pad(seg.start.getMonth() + 1)}.${pad(seg.start.getDate())}—${pad(seg.end.getMonth() + 1)}.${pad(seg.end.getDate())}`;
+  }
+
+  landBlockHtml(land, i, segments) {
+    const expanded = land.expanded !== false;
+    const priceRows = segments.map((seg, segIdx) => {
+      const prevYear = segIdx > 0 ? String(segments[segIdx - 1].year) : '';
+      const copyEl = prevYear
+        ? `<button type="button" class="ue-copy-prev" data-action="copy-prev" data-year="${seg.year}" data-prev-year="${prevYear}" title="複製上一期金額">同上</button>`
+        : `<span class="ue-copy-placeholder" aria-hidden="true"></span>`;
+      return `
+        <div class="ue-price-row">
+          <span class="ue-price-label">${escHtml(this.segmentLabel(seg))}</span>
+          <div class="d-input dep-money ue-price-money">
+            <span class="dep-money-pre">$</span>
+            <input type="text" class="font-mono" data-lid="${land.id}" data-year="${seg.year}" value="${escHtml(IU.formatMoney(land.prices[seg.year]))}" inputmode="numeric">
+          </div>
+          ${copyEl}
+        </div>`;
+    }).join('');
+
+    const pricesSection = segments.length > 0 ? `
+      <div class="ue-land-prices${expanded ? '' : ' collapsed'}">
+        <button type="button" class="ue-prices-toggle" data-action="toggle-prices">
+          <svg class="ue-prices-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          年度申報地價
+        </button>
+        <div class="ue-prices-list">${priceRows}</div>
+      </div>` : '';
+
+    return `
+      <div class="ue-land-block" data-lid="${land.id}">
+        <div class="ue-land-row">
+          <span class="ue-land-num">${i + 1}.</span>
+          <span class="ue-land-lbl">地號</span>
+          <input type="text" class="ue-land-name" data-field="name" value="${escHtml(land.name)}" maxlength="9">
+          <span class="ue-land-lbl">面積</span>
+          <input type="text" class="ue-land-area" data-field="area" value="${escHtml(formatAreaNum(land.area))}" inputmode="decimal">
+          <span class="ue-land-lbl">平方公尺</span>
+          <button type="button" class="ue-land-ins" data-action="ins-land" title="新增土地">+</button>
+          <button type="button" class="ue-land-del" data-action="del-land" title="刪除" ${this.lands.length <= 1 ? 'disabled' : ''}>×</button>
+        </div>
+        ${pricesSection}
+      </div>`;
+  }
+
+  renderLandList(segments) {
+    this.el.landList.innerHTML = this.lands.map((l, i) => this.landBlockHtml(l, i, segments)).join('');
+  }
+
+  compute() {
+    return computeRentUnjust(this.getForm(), this.lands);
+  }
+
+  recalc(rerender = true) {
+    if (!this.bound && !this.bind()) return;
+    const res = this.compute();
+    if (rerender) this.renderLandList(res.segments);
+    const amt = res.valid ? res.totalAmount : 0;
+    const monthly = res.valid && res.totalDays > 0 ? res.avgMonthly : 0;
+    this.el.totalAmt.textContent = `$${amt.toLocaleString()}`;
+    this.el.totalMonthly.textContent = `$${monthly.toLocaleString()}`;
+    this.el.draft.value = res.draft;
+    this.el.copyBtn.disabled = !res.draft.trim();
+    this.el.importFeeBtn.disabled = !(res.valid && res.totalAmount > 0);
+    this.el.back5Btn.disabled = !DC.parseDate(this.el.end.value);
+  }
+
+  importToFee(btn) {
+    const res = this.compute();
+    if (!res.valid || res.totalAmount <= 0) return;
+    if (this.feeManager.importAmount(res.totalAmount, btn)) {
+      this.tabManager.activate('tabCalc');
+    }
+  }
+
+  reset(btn) {
+    if (!this.bound) return;
+    this.nextLandId = 1;
+    this.lands = [{ id: this.nextLandId++, name: '', area: '', prices: {}, expanded: true }];
+    this.el.start.value = '';
+    this.el.end.value = '';
+    this.el.rate.value = '5';
+    this.syncRateVal();
+    this.el.buildVal.value = '';
+    this.recalc();
     if (btn) flashBtn(btn, '已清除✓');
   }
 }
@@ -1766,52 +2038,61 @@ class DepreciationCalculatorManager {
 class TabManager {
   constructor() {
     this.panels = document.querySelectorAll('.tab-panel');
-    this.switchEl = $('tabSwitch');
-    this.thumb = $('tabSwitchThumb');
-    this.primaryTexts = this.switchEl.querySelectorAll('.tab-switch-text');
-    this.secondaryTabs = [
-      { id: 'tabInterest', btn: $('tabInterestBtn') },
-      { id: 'tabDepreciation', btn: $('tabDepreciationBtn') }
-    ];
-    this.secondaryIds = this.secondaryTabs.map(t => t.id);
-    this.primaryIds = ['tabCalc', 'tabDeadline', 'tabDate'];
+    this.activateHooks = {};
 
-    this.primaryTexts.forEach(t => {
-      t.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.activate(t.dataset.tab);
+    /* 自動掃描 DOM 中所有 .tab-switch 容器，每個容器內的 .tab-switch-text 視為一組 tabs
+       未來新增第 N 列只需在 HTML 多加一段 <div class="tab-switch">，CSS 與 JS 自動套用 */
+    this.switches = Array.from(document.querySelectorAll('.tab-switch')).map(el => {
+      const thumb = el.querySelector('.tab-switch-thumb');
+      const texts = Array.from(el.querySelectorAll('.tab-switch-text'));
+      const ids = texts.map(t => t.dataset.tab).filter(Boolean);
+      el.style.setProperty('--n', String(ids.length));
+      return { el, thumb, texts, ids };
+    });
+
+    this.switches.forEach(({ texts }) => {
+      texts.forEach(t => {
+        t.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.activate(t.dataset.tab);
+        });
       });
     });
-    this.secondaryTabs.forEach(({ id, btn }) => {
-      btn.addEventListener('click', () => this.activate(id));
-    });
+  }
 
+  /** 註冊切換到某個 tab 時要執行的 hook（避免 TabManager 直接讀全域 const，造成 TDZ） */
+  registerActivateHook(tabId, fn) {
+    if (typeof fn === 'function') this.activateHooks[tabId] = fn;
+  }
+
+  /** 在所有 hook 都註冊完後再呼叫，恢復上次 active 的 tab */
+  restoreActiveTab() {
     const saved = localStorage.getItem('civilCalc_activeTab');
     this.activate(saved && document.getElementById(saved) ? saved : 'tabCalc');
   }
 
   activate(tabId) {
     this.active = tabId;
-    const isSecondary = this.secondaryIds.includes(tabId);
-    this.secondaryTabs.forEach(({ id, btn }) => {
-      btn.classList.toggle('active', tabId === id);
-    });
-    this.switchEl.classList.toggle('inactive', isSecondary);
 
-    const idx = this.primaryIds.indexOf(tabId);
-    if (idx >= 0) {
-      this.thumb.className = 'tab-switch-thumb' + (idx > 0 ? ` pos${idx}` : '');
-      this.primaryTexts.forEach(t => {
-        t.style.color = t.dataset.tab === tabId ? '#fff' : '';
+    /* 對每一個 switch 容器：若 tabId 在此 switch 內，更新 thumb 位置 + active 文字；否則整個 switch 標記 inactive */
+    this.switches.forEach(({ el, thumb, texts, ids }) => {
+      const idx = ids.indexOf(tabId);
+      const isActive = idx >= 0;
+      el.classList.toggle('inactive', !isActive);
+      if (isActive && thumb) {
+        thumb.className = 'tab-switch-thumb' + (idx > 0 ? ` pos${idx}` : '');
+      }
+      texts.forEach((t, i) => {
+        t.classList.toggle('active', isActive && i === idx);
       });
-    } else {
-      this.primaryTexts.forEach(t => { t.style.color = ''; });
-    }
+    });
 
     this.panels.forEach(p => p.classList.toggle('active', p.id === tabId));
     localStorage.setItem('civilCalc_activeTab', tabId);
-    if (tabId === 'tabDepreciation' && typeof depreciationCalc !== 'undefined') {
-      depreciationCalc.bind();
+
+    const hook = this.activateHooks[tabId];
+    if (hook) {
+      try { hook(); } catch (e) { console.error('[TabManager] hook error:', e); }
     }
   }
 }
@@ -1829,6 +2110,11 @@ const dateCalc = new DateCalculatorManager();
 const depreciationCalc = new DepreciationCalculatorManager();
 const tabManager = new TabManager();
 const interestCalc = new InterestCalculatorManager(feeManager, tabManager);
+const rentUnjustCalc = new RentUnjustCalculatorManager(feeManager, tabManager);
+
+tabManager.registerActivateHook('tabDepreciation', () => depreciationCalc.bind());
+tabManager.registerActivateHook('tabRentUnjust', () => rentUnjustCalc.bind());
+tabManager.restoreActiveTab();
 
 if (IS_SIDEPANEL) {
   document.documentElement.classList.add('sidepanel');

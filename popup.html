@@ -62,39 +62,34 @@
     .tab-bar-row1 {
       display: flex; align-items: center; gap: 8px;
     }
+    /* 統一 pill switch 元件：第一列、第二列、未來新增列皆共用同一套樣式
+       支援任意數量分頁（1~N），thumb 寬度自動依 --n 計算 */
     .tab-switch {
       position: relative; height: 32px;
       background: #e5e7eb; border-radius: 999px; padding: 4px;
       display: flex; flex: 1; min-width: 0; overflow: hidden;
+      --n: 3; /* 分頁數，由 inline style 或 JS 自動覆寫 */
     }
     .tab-switch.inactive .tab-switch-thumb { opacity: 0; }
-    .tab-row2-btn {
-      width: 100%; height: 28px; border: 0; border-radius: 999px;
-      background: #e5e7eb; color: var(--text-muted);
-      font-size: 11px; font-weight: 700; cursor: pointer;
-      transition: background 0.25s, color 0.25s;
-    }
-    .tab-bar-row2 {
-      display: flex; gap: 6px;
-    }
-    .tab-bar-row2 .tab-row2-btn { flex: 1; }
-    .tab-row2-btn.active {
-      background: var(--blue); color: #fff;
-    }
     .tab-switch-thumb {
       position: absolute; left: 4px; top: 4px;
-      width: calc(33.333% - 3px); height: 24px;
+      width: calc((100% - 8px) / var(--n)); height: 24px;
       background: var(--blue); border-radius: 999px;
-      transition: transform 0.3s; transform: translateX(0);
+      transition: transform 0.3s, opacity 0.2s; transform: translateX(0);
     }
     .tab-switch-thumb.pos1 { transform: translateX(100%); }
     .tab-switch-thumb.pos2 { transform: translateX(200%); }
+    .tab-switch-thumb.pos3 { transform: translateX(300%); }
+    .tab-switch-thumb.pos4 { transform: translateX(400%); }
     .tab-switch-text {
       position: relative; z-index: 1; flex: 1; text-align: center;
       font-size: 11px; font-weight: 700; line-height: 24px;
       padding: 0 4px; white-space: nowrap; transition: color 0.3s;
       user-select: none; cursor: pointer; overflow: hidden; text-overflow: ellipsis;
+      border: 0; background: transparent; color: var(--text);
     }
+    .tab-switch-text.active { color: #fff; }
+    .tab-bar-row2 { display: flex; }
     .tab-bar .spacer { flex: 0; }
     .tab-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
     .tab-panel.active { display: flex; }
@@ -573,6 +568,7 @@
     .ic-card {
       border: 1px solid var(--border); border-radius: 8px; background: #fff;
       overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+      flex-shrink: 0;
     }
     .ic-card__head {
       display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
@@ -667,6 +663,20 @@
     .ic-form__principal .ic-years {
       margin-left: auto; flex-shrink: 1; min-width: 0;
       text-align: right;
+    }
+    .ic-import {
+      flex-shrink: 0; height: 30px; padding: 0 8px;
+      font-size: 10px; font-weight: 700; white-space: nowrap;
+      border: 1px solid var(--blue); border-radius: 4px;
+      background: #eff6ff; color: var(--blue); cursor: pointer;
+      font-family: 'Inter', 'Microsoft JhengHei', sans-serif;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .ic-import:hover:not(:disabled) {
+      background: var(--blue); color: #fff; border-color: var(--blue);
+    }
+    .ic-import:disabled {
+      opacity: 0.4; cursor: not-allowed;
     }
     .ic-date-sep {
       flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--text-muted);
@@ -828,17 +838,259 @@
     }
     #depDraft:focus { border-color: var(--blue); }
 
+    /* ── Tab 6: Rent Unjust Enrichment (ue-) ── */
+    #tabRentUnjust { overflow: hidden; }
+    .ue-wrap {
+      flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .ue-scroll {
+      flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px;
+      display: flex; flex-direction: column;
+    }
+    /* 防呆：scroll 內的區塊取自然高度，不會被 .dl-field 等 flex:1 樣式不慎撐到 fill 整個垂直空間 */
+    .ue-scroll > * { flex: 0 0 auto; }
+    .ue-scroll::-webkit-scrollbar { width: 4px; }
+    .ue-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+    /* 顯式 margin 控制各區塊間距，土地永遠緊貼年息拉桿底部、不會因為 dates 切換而位移 */
+    .ue-dates-row {
+      display: flex; align-items: flex-end; gap: 6px;
+      margin-bottom: 8px;
+    }
+    .ue-rate-row { margin-bottom: 8px; }
+    .ue-lands { margin-top: 0; margin-bottom: 8px; }
+    .ue-dates-row .dl-field { flex: 1; min-width: 0; }
+    .ue-dates-row .label-sm { display: block; margin-bottom: 3px; }
+    .ue-back5 {
+      flex-shrink: 0; height: 32px; padding: 0 10px; margin-bottom: 0;
+      font-size: 11px; font-weight: 700; white-space: nowrap; line-height: 1;
+      display: inline-flex; align-items: center; gap: 5px;
+      border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
+      color: var(--blue); cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+    .ue-back5 svg { display: block; flex-shrink: 0; }
+    .ue-back5:hover:not(:disabled) {
+      border-color: var(--blue); color: var(--blue-dark);
+      background: #f0f7ff; box-shadow: 0 1px 2px rgba(37, 99, 235, 0.12);
+    }
+    .ue-back5:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+    .ue-back5:disabled { opacity: 0.4; cursor: not-allowed; }
+    /* 年息拉桿：軌道 1px 細線；刻度與 thumb 中心嚴格對齊
+       (slider thumb 11px，左右各以 5.5px padding 對齊，再用 flex space-between 平均分布 10 個 0 寬 tick) */
+    .ue-rate-row {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .ue-rate-row .label-sm { margin: 0; }
+    .ue-rate-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .ue-rate-val {
+      font-size: 13px; font-weight: 700; color: var(--blue);
+      font-family: 'JetBrains Mono', monospace; min-width: 2rem; text-align: right;
+    }
+    .ue-rate-slider {
+      width: 100%; height: 14px; margin: 0; padding: 0; display: block;
+      cursor: pointer; background: transparent;
+      -webkit-appearance: none; appearance: none;
+    }
+    .ue-rate-slider::-webkit-slider-runnable-track {
+      height: 1px; border-radius: 0.5px; background: #d1d5db; border: 0;
+    }
+    .ue-rate-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 11px; height: 11px; margin-top: -5px;
+      border-radius: 50%; background: var(--blue); border: 2px solid #fff;
+      box-shadow: 0 0 0 1px var(--blue);
+    }
+    .ue-rate-slider::-moz-range-track {
+      height: 1px; border-radius: 0.5px; background: #d1d5db; border: 0;
+    }
+    .ue-rate-slider::-moz-range-thumb {
+      width: 11px; height: 11px; border-radius: 50%; background: var(--blue);
+      border: 2px solid #fff; box-shadow: 0 0 0 1px var(--blue);
+    }
+    .ue-rate-scale {
+      display: flex; justify-content: space-between;
+      padding: 0 5.5px; margin-top: 0; user-select: none;
+    }
+    .ue-rate-tick {
+      width: 0; flex: 0 0 0; display: flex;
+      flex-direction: column; align-items: center; gap: 2px;
+    }
+    .ue-rate-tick-mark {
+      width: 1px; height: 4px; background: #9ca3af;
+    }
+    .ue-rate-tick > span:last-child {
+      font-size: 9px; font-weight: 700; color: var(--text-muted); line-height: 1;
+      font-family: 'JetBrains Mono', monospace; white-space: nowrap;
+    }
+    /* 土地、房屋使用相同卡片樣式（白底圓角邊框 + 灰底 header） */
+    .ue-lands,
+    .ue-build {
+      border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+      background: #fff;
+    }
+    .ue-lands-head,
+    .ue-build-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 8px; background: var(--bg-panel); border-bottom: 1px solid var(--border);
+    }
+    .ue-lands-head .label-sm,
+    .ue-build-head .label-sm { margin: 0; }
+    .ue-build-body { padding: 6px 8px; }
+    .ue-build-body .d-input.dep-money { height: 30px; }
+    .ue-land-block {
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .ue-land-block:last-child { border-bottom: none; }
+    .ue-land-row {
+      display: flex; align-items: center; gap: 4px; padding: 4px 6px;
+    }
+    .ue-land-num {
+      width: 14px; text-align: right; font-size: 11px; font-weight: 700;
+      color: var(--text-muted); flex-shrink: 0;
+    }
+    .ue-land-lbl {
+      flex-shrink: 0; font-size: 11px; font-weight: 700;
+      color: var(--text-muted); line-height: 1; white-space: nowrap;
+    }
+    /* 地號：9 個半形字元寬度（monospace），無 placeholder */
+    .ue-land-name {
+      flex: 0 0 auto; width: 5rem; min-width: 0; height: 28px;
+      border: 1px solid #d1d5db; border-radius: 3px;
+      padding: 0 6px; font-size: 12px; outline: 0;
+      font-family: 'JetBrains Mono', monospace; letter-spacing: -0.01em;
+    }
+    .ue-land-name:focus { border-color: var(--blue); }
+    /* 面積：右對齊數字輸入框，無 placeholder */
+    .ue-land-area {
+      flex: 1; min-width: 3rem; height: 28px;
+      border: 1px solid #d1d5db; border-radius: 3px;
+      padding: 0 6px; font-size: 12px; outline: 0;
+      text-align: right; font-family: 'JetBrains Mono', monospace;
+    }
+    .ue-land-area:focus { border-color: var(--blue); }
+    .ue-land-ins,
+    .ue-land-del {
+      width: 24px; height: 28px; flex-shrink: 0;
+      border: 1px solid #e5e7eb; border-radius: 3px;
+      background: #fff; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      line-height: 1; padding: 0;
+    }
+    .ue-land-ins { color: var(--text-muted); font-size: 14px; }
+    .ue-land-ins:hover { color: var(--blue); border-color: var(--blue); }
+    .ue-land-del { color: var(--rose); font-size: 14px; }
+    .ue-land-del:hover:not(:disabled) { border-color: var(--rose); }
+    .ue-land-del:disabled { opacity: 0.3; cursor: not-allowed; }
+    /* per-land nested prices */
+    .ue-land-prices {
+      padding: 0 6px 6px 24px;
+      background: #fafbfc;
+      border-top: 1px dashed #e5e7eb;
+    }
+    .ue-prices-toggle {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 6px; margin: 3px 0 5px -4px;
+      border: 0; background: transparent; line-height: 1;
+      font-size: 10px; font-weight: 700; color: var(--text-muted);
+      cursor: pointer; border-radius: 3px;
+    }
+    .ue-prices-toggle:hover { color: var(--blue); background: #eff6ff; }
+    .ue-prices-caret { transition: transform 0.15s; display: block; }
+    .ue-land-prices.collapsed .ue-prices-caret { transform: rotate(-90deg); }
+    .ue-land-prices.collapsed .ue-prices-list { display: none; }
+    .ue-prices-list {
+      display: flex; flex-direction: column; gap: 4px; padding-bottom: 2px;
+    }
+    /* 年度申報地價：左 indent + 日期固定欄寬 + 金額固定寬 + 同上鈕固定寬，跨列嚴格對齊 */
+    .ue-prices-list { padding-left: 8px; }
+    .ue-price-row {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .ue-price-label {
+      flex: 0 0 6.75rem; min-width: 0;
+      font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      letter-spacing: -0.01em;
+    }
+    /* 6 位數字（999,999）剛好的寬度：prefix 24 + input ~60 + border/padding ≈ 6.5rem */
+    .ue-price-money {
+      flex: 0 0 6.5rem; min-width: 0; height: 28px;
+    }
+    .ue-price-money.dep-money.d-input .dep-money-pre {
+      width: 24px; font-size: 11px;
+    }
+    .ue-price-money.dep-money.d-input input {
+      font-size: 12px; padding: 0 5px;
+    }
+    /* 「同上」獨立按鈕，固定 2.5rem 寬，沒有時用同寬 placeholder 維持各列對齊 */
+    .ue-copy-prev,
+    .ue-copy-placeholder {
+      flex: 0 0 2.5rem; height: 28px;
+    }
+    .ue-copy-prev {
+      border: 1px solid #d1d5db; border-radius: 3px; background: #fff;
+      color: var(--blue); font-size: 11px; font-weight: 700; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      line-height: 1; padding: 0; transition: background 0.15s, border-color 0.15s;
+    }
+    .ue-copy-prev:hover { background: #eff6ff; border-color: var(--blue); }
+    .ue-copy-prev:active { background: #dbeafe; }
+    .ue-copy-placeholder { visibility: hidden; }
+    .ue-total-bar {
+      flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 4px 12px; background: #eff6ff; border-top: 1px solid #bfdbfe;
+    }
+    .ue-total-main { flex: 1; min-width: 0; }
+    .ue-total-line {
+      display: flex; flex-wrap: wrap; align-items: baseline; margin: 0;
+      gap: 2px 5px; font-size: 11px; line-height: 1.2;
+    }
+    .ue-total-lbl { font-weight: 700; color: var(--text-muted); white-space: nowrap; }
+    .ue-total-val {
+      font-size: 14px; font-weight: 700; color: var(--rose);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .ue-total-sep { color: var(--text-muted); font-weight: 600; }
+    /* 對齊利息計算分頁 .ic-foot__acts 的 primary 按鈕 */
+    .ue-total-bar .btn-action {
+      flex-shrink: 0; height: 30px; padding: 0 10px; font-size: 11px; font-weight: 700;
+    }
+    .ue-total-bar .btn-action.primary {
+      background: var(--blue); color: #fff; border-color: var(--blue);
+    }
+    .ue-total-bar .btn-action.primary:hover:not(:disabled) { background: var(--blue-dark); }
+    .ue-total-bar .btn-action:disabled { opacity: 0.45; cursor: not-allowed; }
+    .ue-foot {
+      flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg-panel);
+      padding: 6px 16px 10px; display: flex; flex-direction: column; min-height: 0;
+      max-height: 42%;
+    }
+    .ue-foot-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 4px; flex-shrink: 0;
+    }
+    .ue-foot-head .label-sm { margin: 0; }
+    #ueDraft {
+      flex: 1; min-height: 4.5rem; width: 100%;
+      padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;
+      background: #fff; font-size: 11px; line-height: 1.45; color: var(--text);
+      resize: none; outline: 0; font-family: inherit; box-sizing: border-box;
+      white-space: pre-wrap; word-break: break-word; overflow-y: auto;
+    }
+    #ueDraft:focus { border-color: var(--blue); }
+
   </style>
 </head>
 <body>
   <!-- Tab Bar -->
   <nav class="tab-bar">
     <div class="tab-bar-row1">
-      <div class="tab-switch" id="tabSwitch">
-        <div class="tab-switch-thumb" id="tabSwitchThumb"></div>
-        <div class="tab-switch-text" data-tab="tabCalc">速算．裁判費</div>
-        <div class="tab-switch-text" data-tab="tabDeadline">救濟期間</div>
-        <div class="tab-switch-text" data-tab="tabDate">日期計算</div>
+      <div class="tab-switch">
+        <div class="tab-switch-thumb"></div>
+        <button type="button" class="tab-switch-text" data-tab="tabCalc">速算．裁判費</button>
+        <button type="button" class="tab-switch-text" data-tab="tabDeadline">救濟期間</button>
+        <button type="button" class="tab-switch-text" data-tab="tabDate">日期計算</button>
       </div>
       <button id="pinBtn" class="pin-btn" title="釘選至側邊面板">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -848,8 +1100,12 @@
       </button>
     </div>
     <div class="tab-bar-row2">
-      <button type="button" class="tab-row2-btn" id="tabInterestBtn" data-tab="tabInterest">利息計算</button>
-      <button type="button" class="tab-row2-btn" id="tabDepreciationBtn" data-tab="tabDepreciation">折舊計算</button>
+      <div class="tab-switch">
+        <div class="tab-switch-thumb"></div>
+        <button type="button" class="tab-switch-text" id="tabInterestBtn" data-tab="tabInterest">利息計算</button>
+        <button type="button" class="tab-switch-text" id="tabDepreciationBtn" data-tab="tabDepreciation">折舊計算</button>
+        <button type="button" class="tab-switch-text" id="tabRentUnjustBtn" data-tab="tabRentUnjust">租金不當得利</button>
+      </div>
     </div>
   </nav>
 
@@ -1370,6 +1626,100 @@
           </div>
         </div>
         <textarea id="depDraft" spellcheck="false" ></textarea>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ═══ Tab 6: 租金不當得利 ═══ -->
+  <div id="tabRentUnjust" class="tab-panel">
+    <div class="ue-wrap">
+      <div class="ue-scroll">
+        <div class="ue-dates-row">
+          <div class="dl-field">
+            <label class="label-sm" for="ueStart">起日</label>
+            <div class="d-input">
+              <input id="ueStart" type="text" class="font-mono" maxlength="8">
+              <div class="d-cal" title="選擇日期">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <input type="date" tabindex="-1">
+              </div>
+            </div>
+          </div>
+          <button type="button" id="ueBack5Btn" class="ue-back5" disabled title="由迄日回推 5 年"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg><span>回推 5 年</span></button>
+          <div class="dl-field">
+            <label class="label-sm" for="ueEnd">迄日</label>
+            <div class="d-input">
+              <input id="ueEnd" type="text" class="font-mono" maxlength="8">
+              <div class="d-cal" title="選擇日期">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <input type="date" tabindex="-1">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ue-rate-row">
+          <div class="ue-rate-head">
+            <label class="label-sm" for="ueRate">年息</label>
+            <span id="ueRateVal" class="ue-rate-val">5%</span>
+          </div>
+          <input type="range" id="ueRate" class="ue-rate-slider" min="1" max="10" step="1" value="5">
+          <div class="ue-rate-scale" aria-hidden="true">
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>1%</span></div>
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>2%</span></div>
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>3%</span></div>
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>4%</span></div>
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>5%</span></div>
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>6%</span></div>
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>7%</span></div>
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>8%</span></div>
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>9%</span></div>
+            <div class="ue-rate-tick"><span class="ue-rate-tick-mark"></span><span>10%</span></div>
+          </div>
+        </div>
+
+        <div class="ue-lands">
+          <div class="ue-lands-head">
+            <span class="label-sm">土地</span>
+          </div>
+          <div id="ueLandList"></div>
+        </div>
+
+        <div class="ue-build">
+          <div class="ue-build-head">
+            <label class="label-sm" for="ueBuildVal">房屋現值（選填）</label>
+          </div>
+          <div class="ue-build-body">
+            <div class="d-input dep-money">
+              <span class="dep-money-pre">$</span>
+              <input id="ueBuildVal" type="text" class="font-mono" inputmode="numeric">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ue-total-bar">
+        <div class="ue-total-main">
+          <p class="ue-total-line font-mono">
+            <span class="ue-total-lbl">總請求金額</span>
+            <span id="ueTotalAmt" class="ue-total-val">$0</span>
+            <span class="ue-total-sep">/</span>
+            <span class="ue-total-lbl">換算月均</span>
+            <span id="ueTotalMonthly" class="ue-total-val">$0</span>
+          </p>
+        </div>
+        <button type="button" id="ueImportFeeBtn" class="btn-action primary" disabled>帶入裁判費</button>
+      </div>
+
+      <footer class="ue-foot">
+        <div class="ue-foot-head">
+          <span class="label-sm">書狀草稿</span>
+          <div class="dep-foot-actions">
+            <button type="button" id="ueCopyBtn" class="btn-text btn-blue" disabled>複製</button>
+            <button type="button" id="ueResetBtn" class="btn-text btn-rose">清除</button>
+          </div>
+        </div>
+        <textarea id="ueDraft" spellcheck="false" readonly></textarea>
       </footer>
     </div>
   </div>
