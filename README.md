@@ -20,6 +20,7 @@
 - [技術說明](#技術說明)
 - [專案結構](#專案結構)
 - [版本歷史](#版本歷史)
+- [圖示來源](#圖示來源)
 - [免責聲明](#免責聲明)
 - [授權](#授權)
 
@@ -168,6 +169,7 @@
 ├── manifest.json   # 擴充套件設定
 ├── popup.html      # 介面與樣式
 ├── popup.js        # 計算邏輯
+├── icons/          # 擴充功能圖示（16 / 48 / 128 px）
 ├── CHANGELOG.md    # 版本歷史
 ├── LICENSE         # MIT
 └── README.md
@@ -178,6 +180,12 @@
 ## 版本歷史
 
 目前版本：**2.1**（見 `manifest.json`）。各版本變更摘要見 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
+## 圖示來源
+
+擴充功能圖示（`icons/`）來自 TopeconHeroes 的 [ICOOON MONO](https://icooon-mono.com/about-icoon-mono/) 圖示集。使用條件請依該站授權規定為準。
 
 ---
 
